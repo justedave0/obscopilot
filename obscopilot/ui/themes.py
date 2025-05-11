@@ -114,7 +114,7 @@ class Theme:
         
         Args:
             data: Theme data dictionary
-            
+        
         Returns:
             Theme instance
         """
@@ -370,7 +370,7 @@ class ThemeManager:
         
         Args:
             theme: Theme to create stylesheet for
-            
+        
         Returns:
             CSS stylesheet
         """
