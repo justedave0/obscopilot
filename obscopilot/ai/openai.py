@@ -7,10 +7,10 @@ This module provides integration with the OpenAI API for generating AI responses
 import asyncio
 import logging
 import time
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Any
 
-import openai
-from openai.types.chat import ChatCompletionMessage, ChatCompletionMessageParam
+from openai import OpenAI, AsyncOpenAI
+from openai.types.chat import ChatCompletionMessageParam
 
 from obscopilot.core.config import Config
 from obscopilot.core.events import Event, EventType, event_bus
@@ -29,6 +29,8 @@ class OpenAIClient:
         """
         self.config = config
         self.event_bus = event_bus
+        self.client = None
+        self.async_client = None
         self.setup_client()
         self.conversation_contexts: Dict[str, List[ChatCompletionMessageParam]] = {}
         
@@ -40,8 +42,9 @@ class OpenAIClient:
             return
             
         try:
-            # Initialize the OpenAI client
-            openai.api_key = api_key
+            # Create both sync and async OpenAI clients
+            self.client = OpenAI(api_key=api_key)
+            self.async_client = AsyncOpenAI(api_key=api_key)
             logger.info("OpenAI client initialized")
         except Exception as e:
             logger.error(f"Error setting up OpenAI client: {e}")
@@ -68,8 +71,8 @@ class OpenAIClient:
         Returns:
             Generated response text or None on error
         """
-        if not openai.api_key:
-            logger.error("OpenAI API key not configured, cannot generate response")
+        if not self.async_client:
+            logger.error("OpenAI client not initialized, cannot generate response")
             return None
             
         try:
@@ -99,7 +102,8 @@ class OpenAIClient:
             logger.debug(f"Generating AI response for prompt: {prompt}")
             start_time = time.time()
             
-            response = await openai.chat.completions.create(
+            # Use the async client for better performance
+            response = await self.async_client.chat.completions.create(
                 model=model,
                 messages=messages,
                 temperature=temperature,
@@ -111,10 +115,11 @@ class OpenAIClient:
             response_text = assistant_message.content
             
             # Add assistant response to the conversation context
-            messages.append({"role": "assistant", "content": response_text})
-            
-            # Save the updated conversation context
-            self._save_conversation_context(conversation_id, messages)
+            if response_text:
+                messages.append({"role": "assistant", "content": response_text})
+                
+                # Save the updated conversation context
+                self._save_conversation_context(conversation_id, messages)
             
             # Calculate token usage and cost
             prompt_tokens = response.usage.prompt_tokens
@@ -140,17 +145,195 @@ class OpenAIClient:
             ))
             
             return response_text
-        except openai.APIError as e:
-            logger.error(f"OpenAI API error: {e}")
-            return None
         except Exception as e:
             logger.error(f"Error generating AI response: {e}")
+            return None
+    
+    async def generate_streaming_response(
+        self, 
+        prompt: str, 
+        system_prompt: Optional[str] = None,
+        conversation_id: Optional[str] = None,
+        user_info: Optional[Dict] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        callback: Optional[callable] = None
+    ) -> Optional[str]:
+        """Generate a streaming AI response using the OpenAI API.
+        
+        Args:
+            prompt: User prompt to generate a response for
+            system_prompt: System prompt to guide the AI behavior
+            conversation_id: ID for maintaining conversation context
+            user_info: Information about the user to include in the context
+            temperature: Temperature for response randomness (0-2)
+            max_tokens: Maximum tokens in the response
+            callback: Function to call for each chunk of the response
+            
+        Returns:
+            Complete generated response text or None on error
+        """
+        if not self.async_client:
+            logger.error("OpenAI client not initialized, cannot generate response")
+            return None
+            
+        try:
+            # Get settings from config if not provided
+            model = self.config.get('openai', 'model', 'gpt-3.5-turbo')
+            temperature = temperature or self.config.get('openai', 'temperature', 0.7)
+            max_tokens = max_tokens or self.config.get('openai', 'max_tokens', 150)
+            
+            # Get or create conversation context
+            messages = self._get_conversation_context(conversation_id)
+            
+            # Add system prompt if provided
+            if system_prompt and not any(m.get('role') == 'system' for m in messages):
+                messages.insert(0, {"role": "system", "content": system_prompt})
+            
+            # Add user information to the prompt if provided
+            if user_info:
+                formatted_user_info = "\n".join([f"{k}: {v}" for k, v in user_info.items()])
+                context_prompt = f"{prompt}\n\nUser Information:\n{formatted_user_info}"
+            else:
+                context_prompt = prompt
+            
+            # Add user message to the conversation
+            messages.append({"role": "user", "content": context_prompt})
+            
+            # Generate streaming response
+            logger.debug(f"Generating streaming AI response for prompt: {prompt}")
+            start_time = time.time()
+            
+            full_response = ""
+            
+            # Start streaming
+            stream = await self.async_client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=True
+            )
+            
+            # Collect response chunks
+            async for chunk in stream:
+                # Process each chunk
+                if chunk.choices and chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content
+                    full_response += content
+                    
+                    # Call callback if provided
+                    if callback:
+                        await callback(content)
+            
+            # Add final response to conversation context
+            if full_response:
+                messages.append({"role": "assistant", "content": full_response})
+                
+                # Save the updated context
+                self._save_conversation_context(conversation_id, messages)
+            
+            execution_time = time.time() - start_time
+            logger.info(f"Generated streaming AI response in {execution_time:.2f}s")
+            
+            # Emit AI response event
+            await self.event_bus.emit(Event(
+                EventType.AI_RESPONSE_GENERATED,
+                {
+                    'prompt': prompt,
+                    'response': full_response,
+                    'model': model,
+                    'streaming': True,
+                    'execution_time': execution_time
+                }
+            ))
+            
+            return full_response
+        except Exception as e:
+            logger.error(f"Error generating streaming AI response: {e}")
+            return None
+    
+    async def analyze_image(
+        self,
+        image_path_or_url: str,
+        prompt: str,
+        is_url: bool = False,
+        max_tokens: Optional[int] = None
+    ) -> Optional[str]:
+        """Analyze an image using the OpenAI Vision API.
+        
+        Args:
+            image_path_or_url: Path to image or URL
+            prompt: Prompt describing what to analyze in the image
+            is_url: Whether the image_path_or_url is a URL or local path
+            max_tokens: Maximum tokens for the response
+            
+        Returns:
+            Analysis text or None on error
+        """
+        if not self.async_client:
+            logger.error("OpenAI client not initialized, cannot analyze image")
+            return None
+            
+        try:
+            # Get settings from config if not provided
+            model = self.config.get('openai', 'vision_model', 'gpt-4o')
+            max_tokens = max_tokens or self.config.get('openai', 'max_tokens', 300)
+            
+            # Prepare the image source
+            if is_url:
+                image_source = image_path_or_url
+            else:
+                # For local files, read and base64 encode
+                import base64
+                with open(image_path_or_url, "rb") as image_file:
+                    image_source = f"data:image/jpeg;base64,{base64.b64encode(image_file.read()).decode('utf-8')}"
+            
+            # Create the message content
+            content = [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": image_source}}
+            ]
+            
+            # Make the API call
+            logger.debug(f"Analyzing image with prompt: {prompt}")
+            start_time = time.time()
+            
+            response = await self.async_client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "user", "content": content}
+                ],
+                max_tokens=max_tokens
+            )
+            
+            # Extract response
+            analysis_text = response.choices[0].message.content
+            execution_time = time.time() - start_time
+            
+            logger.info(f"Analyzed image in {execution_time:.2f}s")
+            
+            # Emit event
+            await self.event_bus.emit(Event(
+                EventType.AI_RESPONSE_GENERATED,
+                {
+                    'prompt': prompt,
+                    'response': analysis_text,
+                    'model': model,
+                    'type': 'vision',
+                    'execution_time': execution_time
+                }
+            ))
+            
+            return analysis_text
+        except Exception as e:
+            logger.error(f"Error analyzing image: {e}")
             return None
     
     def _get_conversation_context(
         self, 
         conversation_id: Optional[str]
-    ) -> List[ChatCompletionMessageParam]:
+    ) -> List[Dict[str, Any]]:
         """Get the conversation context for a given ID.
         
         Args:
@@ -169,7 +352,7 @@ class OpenAIClient:
     def _save_conversation_context(
         self, 
         conversation_id: Optional[str], 
-        messages: List[ChatCompletionMessageParam]
+        messages: List[Dict[str, Any]]
     ) -> None:
         """Save the conversation context for a given ID.
         

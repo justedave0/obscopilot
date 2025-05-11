@@ -9,7 +9,7 @@
 ## Phase 2: Service Integration
 - [x] Twitch authentication and event handling
 - [x] OBS WebSocket integration
-- [ ] OpenAI API integration
+- [x] OpenAI API integration
 
 ## Phase 3: Workflow Engine
 - [ ] Workflow model implementation
