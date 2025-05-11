@@ -17,6 +17,7 @@
 - [x] Trigger system
 - [x] Action system
 - [x] Workflow persistence
+- [x] Create visual workflow builder component
 
 ## Phase 4: Advanced Features
 - [x] Custom chat commands
@@ -25,7 +26,7 @@
 - [x] Stream health monitoring
 
 ## Phase 5: UI/UX Enhancements
-- [ ] Workflow editor
+- [x] Workflow editor
 - [x] Dashboard customization
 - [ ] Theming and styling
 - [x] Keyboard shortcuts
@@ -63,7 +64,7 @@ This document outlines the tasks for developing OBSCopilot, a cross-platform Pyt
 ## 3. Workflow Engine
 
 - [x] Design workflow model (triggers, conditions, actions)
-- [ ] Create visual workflow builder component
+- [x] Create visual workflow builder component
 - [x] Implement workflow execution engine
 - [x] Create standard action library:
   - [x] Chat messages (bot responses)
@@ -151,7 +152,7 @@ This document outlines the tasks for developing OBSCopilot, a cross-platform Pyt
 - **Python Version**: 3.9+
 - **Twitch API Library**: TwitchIO or PyTwitchAPI
 - **GUI Framework**: PyQt6 (cross-platform, modern UI)
-- **OBS Integration**: obs-websocket-py 
+- **OBS Integration**: obs-websocket-py
 - **Workflow Engine**: Custom implementation based on SpiffWorkflow
 - **Database**: SQLite (for portability)
 - **AI Integration**: OpenAI Python Client
@@ -187,8 +188,8 @@ Based on analysis of the current codebase, the following tasks would help comple
 - [x] Implement basic workflow editor UI (already done)
 - [x] Integrate editor into main application window (added template selection)
 - [x] Add workflow template gallery (implemented)
-- [ ] Implement drag-and-drop interface for actions and triggers
-- [ ] Add visual flow indicators between workflow steps
+- [x] Implement drag-and-drop interface for actions and triggers
+- [x] Add visual flow indicators between workflow steps
 
 ### 2. Enhance Test Coverage
 

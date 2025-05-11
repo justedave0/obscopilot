@@ -20,6 +20,7 @@ from PyQt6.QtGui import QFont, QIcon, QColor, QPalette
 from obscopilot.workflows.models import Workflow, Trigger, Action, Condition
 from obscopilot.workflows.registry import TRIGGER_REGISTRY, ACTION_REGISTRY
 from obscopilot.core.events import EventType, event_bus
+from obscopilot.ui.visual_workflow_builder import VisualWorkflowBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -615,7 +616,14 @@ class WorkflowEditor(QWidget):
         
         layout.addLayout(description_layout)
         
-        # Create tab widget for triggers and actions
+        # Create tab widget for different editor modes
+        self.editor_tabs = QTabWidget()
+        
+        # Basic editor tab
+        self.basic_editor = QWidget()
+        basic_editor_layout = QVBoxLayout(self.basic_editor)
+        
+        # Create tab widget for triggers and actions within basic editor
         self.tab_widget = QTabWidget()
         
         # Triggers tab
@@ -628,22 +636,21 @@ class WorkflowEditor(QWidget):
         self.add_trigger_button.clicked.connect(self._on_add_trigger)
         self.triggers_layout.addWidget(self.add_trigger_button)
         
-        # Triggers container
+        # Scrollable area for triggers
+        self.triggers_scroll = QScrollArea()
+        self.triggers_scroll.setWidgetResizable(True)
+        self.triggers_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        
         self.triggers_container = QWidget()
         self.triggers_container_layout = QVBoxLayout(self.triggers_container)
         self.triggers_container_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.triggers_container_layout.setContentsMargins(0, 0, 0, 0)
         self.triggers_container_layout.setSpacing(10)
         
-        # Add existing triggers
-        self._populate_triggers()
+        self.triggers_scroll.setWidget(self.triggers_container)
+        self.triggers_layout.addWidget(self.triggers_scroll)
         
-        # Add triggers container to scroll area
-        triggers_scroll = QScrollArea()
-        triggers_scroll.setWidgetResizable(True)
-        triggers_scroll.setWidget(self.triggers_container)
-        
-        self.triggers_layout.addWidget(triggers_scroll)
+        self.tab_widget.addTab(self.triggers_widget, "Triggers")
         
         # Actions tab
         self.actions_widget = QWidget()
@@ -655,28 +662,34 @@ class WorkflowEditor(QWidget):
         self.add_action_button.clicked.connect(self._on_add_action)
         self.actions_layout.addWidget(self.add_action_button)
         
-        # Actions container
+        # Scrollable area for actions
+        self.actions_scroll = QScrollArea()
+        self.actions_scroll.setWidgetResizable(True)
+        self.actions_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        
         self.actions_container = QWidget()
         self.actions_container_layout = QVBoxLayout(self.actions_container)
         self.actions_container_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.actions_container_layout.setContentsMargins(0, 0, 0, 0)
         self.actions_container_layout.setSpacing(10)
         
-        # Add existing actions
-        self._populate_actions()
+        self.actions_scroll.setWidget(self.actions_container)
+        self.actions_layout.addWidget(self.actions_scroll)
         
-        # Add actions container to scroll area
-        actions_scroll = QScrollArea()
-        actions_scroll.setWidgetResizable(True)
-        actions_scroll.setWidget(self.actions_container)
-        
-        self.actions_layout.addWidget(actions_scroll)
-        
-        # Add tabs
-        self.tab_widget.addTab(self.triggers_widget, "Triggers")
         self.tab_widget.addTab(self.actions_widget, "Actions")
         
-        layout.addWidget(self.tab_widget)
+        basic_editor_layout.addWidget(self.tab_widget)
+        
+        # Add the basic editor tab
+        self.editor_tabs.addTab(self.basic_editor, "Basic Editor")
+        
+        # Visual workflow builder tab
+        self.visual_builder = VisualWorkflowBuilder(self.workflow)
+        self.visual_builder.workflow_updated.connect(self._on_visual_workflow_updated)
+        self.editor_tabs.addTab(self.visual_builder, "Visual Builder")
+        
+        # Add editor tabs to main layout
+        layout.addWidget(self.editor_tabs)
         
         # Buttons
         button_layout = QHBoxLayout()
@@ -701,6 +714,10 @@ class WorkflowEditor(QWidget):
         
         layout.addLayout(button_layout)
         
+        # Populate from workflow
+        self._populate_triggers()
+        self._populate_actions()
+
     def _populate_triggers(self):
         """Populate triggers from the workflow."""
         # Clear existing widgets
@@ -753,11 +770,19 @@ class WorkflowEditor(QWidget):
         self.is_modified = True
         self.save_button.setEnabled(True)
         
+        # Update visual builder if it exists
+        if hasattr(self, 'visual_builder'):
+            self.visual_builder.workflow.name = self.workflow.name
+        
     def _on_description_changed(self):
         """Handle description changes."""
         self.workflow.description = self.description_edit.toPlainText()
         self.is_modified = True
         self.save_button.setEnabled(True)
+        
+        # Update visual builder if it exists
+        if hasattr(self, 'visual_builder'):
+            self.visual_builder.workflow.description = self.workflow.description
         
     def _on_enabled_changed(self, state):
         """Handle enabled state changes.
@@ -768,6 +793,10 @@ class WorkflowEditor(QWidget):
         self.workflow.enabled = state == Qt.CheckState.Checked
         self.is_modified = True
         self.save_button.setEnabled(True)
+        
+        # Update visual builder if it exists
+        if hasattr(self, 'visual_builder'):
+            self.visual_builder.workflow.enabled = self.workflow.enabled
         
     def _on_trigger_updated(self, trigger):
         """Handle trigger updates.
@@ -784,6 +813,10 @@ class WorkflowEditor(QWidget):
         self.is_modified = True
         self.save_button.setEnabled(True)
         
+        # Update visual builder if it exists
+        if hasattr(self, 'visual_builder'):
+            self.visual_builder.update_workflow_model()
+        
     def _on_trigger_deleted(self, trigger_id):
         """Handle trigger deletion.
         
@@ -798,6 +831,10 @@ class WorkflowEditor(QWidget):
         
         self.is_modified = True
         self.save_button.setEnabled(True)
+        
+        # Update visual builder if it exists
+        if hasattr(self, 'visual_builder'):
+            self.visual_builder.update_workflow_model()
         
     def _on_action_updated(self, action):
         """Handle action updates.
@@ -814,6 +851,10 @@ class WorkflowEditor(QWidget):
         self.is_modified = True
         self.save_button.setEnabled(True)
         
+        # Update visual builder if it exists
+        if hasattr(self, 'visual_builder'):
+            self.visual_builder.update_workflow_model()
+        
     def _on_action_deleted(self, action_id):
         """Handle action deletion.
         
@@ -829,6 +870,10 @@ class WorkflowEditor(QWidget):
         self.is_modified = True
         self.save_button.setEnabled(True)
         
+        # Update visual builder if it exists
+        if hasattr(self, 'visual_builder'):
+            self.visual_builder.update_workflow_model()
+
     def _on_add_trigger(self):
         """Handle add trigger button click."""
         dialog = AddTriggerDialog(self)
@@ -848,6 +893,10 @@ class WorkflowEditor(QWidget):
             self.is_modified = True
             self.save_button.setEnabled(True)
             
+            # Update visual builder if it exists
+            if hasattr(self, 'visual_builder'):
+                self.visual_builder.update_workflow_model()
+            
     def _on_add_action(self):
         """Handle add action button click."""
         dialog = AddActionDialog(self)
@@ -866,7 +915,32 @@ class WorkflowEditor(QWidget):
             
             self.is_modified = True
             self.save_button.setEnabled(True)
-    
+            
+            # Update visual builder if it exists
+            if hasattr(self, 'visual_builder'):
+                self.visual_builder.update_workflow_model()
+
+    def _on_visual_workflow_updated(self, updated_workflow):
+        """Handle workflow updates from the visual builder.
+        
+        Args:
+            updated_workflow: Updated workflow from visual builder
+        """
+        # Update the main workflow
+        self.workflow = updated_workflow
+        
+        # Update UI in basic editor
+        self.name_edit.setText(self.workflow.name)
+        self.description_edit.setText(self.workflow.description or "")
+        self.enabled_checkbox.setChecked(self.workflow.enabled)
+        
+        # Update triggers and actions
+        self._populate_triggers()
+        self._populate_actions()
+        
+        self.is_modified = True
+        self.save_button.setEnabled(True)
+        
     def _on_export(self):
         """Handle export button click."""
         file_path, _ = QFileDialog.getSaveFileName(
@@ -895,54 +969,34 @@ class WorkflowEditor(QWidget):
                     f"Failed to export workflow: {str(e)}"
                 )
     
-    def _on_cancel(self):
-        """Handle cancel button click."""
-        if self.is_modified:
-            confirm = QMessageBox.question(
-                self, 
-                "Unsaved Changes", 
-                "You have unsaved changes. Are you sure you want to cancel?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            
-            if confirm == QMessageBox.StandardButton.No:
-                return
-        
-        # Emit signal with original workflow
-        self.workflow_saved.emit(self.original_workflow)
-        
     def _on_save(self):
         """Handle save button click."""
-        # Basic validation
+        # Make sure we have the latest workflow from the visual builder if it's active
+        if self.editor_tabs.currentWidget() == self.visual_builder:
+            self.workflow = self.visual_builder.get_workflow()
+            
+        # Verify workflow
         if not self.workflow.name:
-            QMessageBox.warning(
-                self, 
-                "Validation Error", 
-                "Workflow name is required."
-            )
+            QMessageBox.warning(self, "Validation Error", "Workflow must have a name.")
             return
             
-        if not self.workflow.triggers:
+        # Emit signal with workflow
+        self.workflow_saved.emit(self.workflow)
+        
+    def _on_cancel(self):
+        """Handle cancel button click."""
+        # Prompt for confirmation if modified
+        if self.is_modified:
             confirm = QMessageBox.question(
-                self, 
-                "No Triggers", 
-                "This workflow has no triggers defined. Save anyway?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                self,
+                "Discard Changes",
+                "Are you sure you want to discard your changes?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
             )
             
-            if confirm == QMessageBox.StandardButton.No:
+            if confirm != QMessageBox.StandardButton.Yes:
                 return
                 
-        if not self.workflow.actions:
-            confirm = QMessageBox.question(
-                self, 
-                "No Actions", 
-                "This workflow has no actions defined. Save anyway?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-            
-            if confirm == QMessageBox.StandardButton.No:
-                return
-        
-        # Emit signal with updated workflow
-        self.workflow_saved.emit(self.workflow) 
+        # Emit signal with original workflow
+        self.workflow_saved.emit(self.original_workflow) 
