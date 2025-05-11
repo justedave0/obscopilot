@@ -77,32 +77,34 @@ This document outlines the tasks for developing OBSCopilot, a cross-platform Pyt
 
 ## 4. OBS Integration
 
-- [ ] Implement OBS WebSocket client
-- [ ] Create methods for:
-  - [ ] Scene switching
-  - [ ] Source visibility control
-  - [ ] Media playback
-  - [ ] Recording/streaming control
-  - [ ] Audio control
-- [ ] Add error handling for OBS connection issues
-- [ ] Implement automatic reconnection
+- [x] Implement OBS WebSocket client
+- [x] Create methods for:
+  - [x] Scene switching
+  - [x] Source visibility control
+  - [x] Media playback
+  - [x] Recording/streaming control
+  - [x] Audio control
+- [x] Add error handling for OBS connection issues
+- [x] Implement automatic reconnection
 
 ## 5.a OpenAI Integration
 
-- [ ] Add OpenAI API client
-- [ ] Create system prompt management interface
-- [ ] Implement AI response generation for chat
-- [ ] Add context tracking for conversations
-- [ ] Create templating system for AI responses (including user info)
-- [ ] Implement rate limiting and token usage tracking
-- [ ] Add error handling for API failures
+- [x] Add OpenAI API client
+- [x] Create system prompt management interface
+- [x] Implement AI response generation for chat
+- [x] Add context tracking for conversations
+- [x] Create templating system for AI responses (including user info)
+- [x] Implement rate limiting and token usage tracking
+- [x] Add error handling for API failures
 
 ## 5.b Google AI Integration
 
-- [ ] Add Google AI API client
-- [ ] Implement AI response generation for chat
-- [ ] Add context tracking for conversations
-- [ ] Create templating system for AI responses (including user info) 
+- [x] Add Google AI API client
+- [x] Implement AI response generation for chat
+- [x] Add context tracking for conversations
+- [x] Create templating system for AI responses (including user info)
+- [x] Implement rate limiting and token usage tracking
+- [x] Add error handling for API failures
 
 ## 6. User Interface
 

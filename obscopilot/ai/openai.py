@@ -8,12 +8,16 @@ import asyncio
 import logging
 import time
 from typing import Dict, List, Optional, Union, Any
+import backoff
+import aiohttp
 
 from openai import OpenAI, AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
+from openai import APIError, RateLimitError, APIConnectionError, APITimeoutError
 
 from obscopilot.core.config import Config
 from obscopilot.core.events import Event, EventType, event_bus
+from obscopilot.ai.rate_limiter import rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +53,12 @@ class OpenAIClient:
         except Exception as e:
             logger.error(f"Error setting up OpenAI client: {e}")
     
+    @backoff.on_exception(
+        backoff.expo,
+        (RateLimitError, APITimeoutError),
+        max_tries=3,
+        factor=2
+    )
     async def generate_response(
         self, 
         prompt: str, 
@@ -76,6 +86,15 @@ class OpenAIClient:
             return None
             
         try:
+            # Check rate limits before making API call
+            allowed, retry_after = rate_limiter.check_rate_limit()
+            if not allowed:
+                logger.warning(f"Rate limit exceeded, retry after {retry_after:.2f} seconds")
+                await asyncio.sleep(retry_after)
+                return await self.generate_response(
+                    prompt, system_prompt, conversation_id, user_info, temperature, max_tokens
+                )
+            
             # Get settings from config if not provided
             model = self.config.get('openai', 'model', 'gpt-3.5-turbo')
             temperature = temperature or self.config.get('openai', 'temperature', 0.7)
@@ -127,6 +146,9 @@ class OpenAIClient:
             total_tokens = response.usage.total_tokens
             execution_time = time.time() - start_time
             
+            # Record token usage
+            rate_limiter.record_token_usage(prompt_tokens, completion_tokens, model)
+            
             logger.info(
                 f"Generated AI response in {execution_time:.2f}s "
                 f"(tokens: {prompt_tokens}+{completion_tokens}={total_tokens})"
@@ -145,8 +167,62 @@ class OpenAIClient:
             ))
             
             return response_text
+        except RateLimitError as e:
+            logger.error(f"OpenAI rate limit exceeded: {e}")
+            await self.event_bus.emit(Event(
+                EventType.AI_ERROR,
+                {
+                    'error': 'rate_limit',
+                    'message': str(e),
+                    'prompt': prompt
+                }
+            ))
+            # Let backoff handle the retry
+            raise
+        except APITimeoutError as e:
+            logger.error(f"OpenAI API timeout: {e}")
+            await self.event_bus.emit(Event(
+                EventType.AI_ERROR,
+                {
+                    'error': 'timeout',
+                    'message': str(e),
+                    'prompt': prompt
+                }
+            ))
+            # Let backoff handle the retry
+            raise
+        except APIConnectionError as e:
+            logger.error(f"OpenAI connection error: {e}")
+            await self.event_bus.emit(Event(
+                EventType.AI_ERROR,
+                {
+                    'error': 'connection',
+                    'message': str(e),
+                    'prompt': prompt
+                }
+            ))
+            return None
+        except APIError as e:
+            logger.error(f"OpenAI API error: {e}")
+            await self.event_bus.emit(Event(
+                EventType.AI_ERROR,
+                {
+                    'error': 'api',
+                    'message': str(e),
+                    'prompt': prompt
+                }
+            ))
+            return None
         except Exception as e:
             logger.error(f"Error generating AI response: {e}")
+            await self.event_bus.emit(Event(
+                EventType.AI_ERROR,
+                {
+                    'error': 'unknown',
+                    'message': str(e),
+                    'prompt': prompt
+                }
+            ))
             return None
     
     async def generate_streaming_response(
