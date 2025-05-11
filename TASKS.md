@@ -2,7 +2,7 @@
 
 ## Phase 1: Core Infrastructure
 - [x] Project setup and dependencies
-- [ ] Configuration management
+- [x] Configuration management
 - [ ] Event bus implementation
 - [ ] Basic GUI layout
 

@@ -1,20 +1,24 @@
 """
 Configuration management for OBSCopilot.
+
+This module provides functionality for loading, saving, and managing application configuration.
 """
 
 import os
 import logging
+import json
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union, TypeVar, Type, cast
 
 import toml
 from dotenv import load_dotenv
 
-logger = logging.getLogger(__name__)
-
 # Load environment variables from .env file if it exists
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
+T = TypeVar('T')
 
 class Config:
     """Configuration manager for OBSCopilot."""
@@ -24,10 +28,12 @@ class Config:
             'theme': 'dark',
             'language': 'en',
             'check_updates': True,
+            'version': '0.1.0',
         },
         'twitch': {
             'broadcaster_client_id': '',
             'broadcaster_client_secret': '',
+            'broadcaster_id': '',
             'bot_client_id': '',
             'bot_client_secret': '',
             'redirect_uri': 'http://localhost:17563',
@@ -51,11 +57,20 @@ class Config:
             'model': 'gpt-3.5-turbo',
             'temperature': 0.7,
             'max_tokens': 150,
+            'max_context_messages': 20,
         },
         'workflows': {
             'auto_load': True,
             'workflow_dir': '',
         },
+        'storage': {
+            'database_path': '',
+        },
+        'ui': {
+            'window_width': 1024,
+            'window_height': 768,
+            'startup_tab': 'dashboard',
+        }
     }
     
     def __init__(self, config_path: Optional[Union[str, Path]] = None):
@@ -122,6 +137,37 @@ class Config:
         except KeyError:
             return default
     
+    def get_typed(self, section: str, key: str, type_hint: Type[T], default: T = None) -> T:
+        """Get a configuration value with type conversion.
+        
+        Args:
+            section: Configuration section
+            key: Configuration key
+            type_hint: Expected type of the value
+            default: Default value if not found or conversion fails
+            
+        Returns:
+            Configuration value converted to the specified type
+        """
+        value = self.get(section, key, default)
+        try:
+            if value is None:
+                return default
+            if type_hint is bool and isinstance(value, str):
+                return cast(T, value.lower() in ('true', 'yes', '1', 'y', 'on'))
+            if type_hint is int and isinstance(value, str):
+                return cast(T, int(value))
+            if type_hint is float and isinstance(value, str):
+                return cast(T, float(value))
+            if type_hint is list and isinstance(value, str):
+                return cast(T, json.loads(value))
+            if type_hint is dict and isinstance(value, str):
+                return cast(T, json.loads(value))
+            return cast(T, value)
+        except (ValueError, TypeError, json.JSONDecodeError) as e:
+            logger.warning(f"Error converting config value {section}.{key} to {type_hint.__name__}: {e}")
+            return default
+    
     def set(self, section: str, key: str, value: Any) -> None:
         """Set a configuration value.
         
@@ -134,6 +180,33 @@ class Config:
             self.config[section] = {}
         
         self.config[section][key] = value
+    
+    def reset_section(self, section: str) -> None:
+        """Reset a configuration section to default values.
+        
+        Args:
+            section: Configuration section to reset
+        """
+        if section in self.DEFAULT_CONFIG:
+            self.config[section] = self.DEFAULT_CONFIG[section].copy()
+        else:
+            logger.warning(f"Cannot reset unknown section: {section}")
+    
+    def reset_all(self) -> None:
+        """Reset all configuration to default values."""
+        self.config = self.DEFAULT_CONFIG.copy()
+    
+    def get_env_var_name(self, section: str, key: str) -> str:
+        """Get the environment variable name for a config option.
+        
+        Args:
+            section: Configuration section
+            key: Configuration key
+            
+        Returns:
+            Environment variable name
+        """
+        return f"OBSCOPILOT_{section.upper()}_{key.upper()}"
     
     def _deep_update(self, target: Dict, source: Dict) -> Dict:
         """Recursively update a dictionary.
@@ -154,29 +227,67 @@ class Config:
     
     def _load_from_env(self) -> None:
         """Load configuration from environment variables."""
-        # Twitch credentials
-        if os.getenv('OBSCOPILOT_BROADCASTER_CLIENT_ID'):
-            self.config['twitch']['broadcaster_client_id'] = os.getenv('OBSCOPILOT_BROADCASTER_CLIENT_ID')
-            
-        if os.getenv('OBSCOPILOT_BROADCASTER_CLIENT_SECRET'):
-            self.config['twitch']['broadcaster_client_secret'] = os.getenv('OBSCOPILOT_BROADCASTER_CLIENT_SECRET')
-            
-        if os.getenv('OBSCOPILOT_BOT_CLIENT_ID'):
-            self.config['twitch']['bot_client_id'] = os.getenv('OBSCOPILOT_BOT_CLIENT_ID')
-            
-        if os.getenv('OBSCOPILOT_BOT_CLIENT_SECRET'):
-            self.config['twitch']['bot_client_secret'] = os.getenv('OBSCOPILOT_BOT_CLIENT_SECRET')
+        # Check each section and key for corresponding environment variables
+        for section, options in self.DEFAULT_CONFIG.items():
+            for key in options:
+                env_var = self.get_env_var_name(section, key)
+                if env_var in os.environ:
+                    value = os.environ[env_var]
+                    
+                    # Handle special types
+                    if isinstance(self.config[section][key], bool):
+                        value = value.lower() in ('true', 'yes', '1', 'y', 'on')
+                    elif isinstance(self.config[section][key], int):
+                        value = int(value)
+                    elif isinstance(self.config[section][key], float):
+                        value = float(value)
+                    elif isinstance(self.config[section][key], list):
+                        try:
+                            value = json.loads(value)
+                        except json.JSONDecodeError:
+                            value = value.split(',')
+                    
+                    # Set the value in the config
+                    self.config[section][key] = value
+                    logger.debug(f"Loaded config from environment: {env_var}")
+    
+    def export_env_file(self, path: Union[str, Path]) -> None:
+        """Export configuration as environment variables to a .env file.
         
-        # OBS connection
-        if os.getenv('OBSCOPILOT_OBS_PASSWORD'):
-            self.config['obs']['password'] = os.getenv('OBSCOPILOT_OBS_PASSWORD')
+        Args:
+            path: Path to the .env file
+        """
+        try:
+            path = Path(path)
+            with open(path, 'w') as f:
+                for section, options in self.config.items():
+                    for key, value in options.items():
+                        env_var = self.get_env_var_name(section, key)
+                        
+                        # Handle special types
+                        if isinstance(value, list):
+                            value = json.dumps(value)
+                        elif isinstance(value, dict):
+                            value = json.dumps(value)
+                        
+                        f.write(f"{env_var}={value}\n")
             
-        if os.getenv('OBSCOPILOT_OBS_HOST'):
-            self.config['obs']['host'] = os.getenv('OBSCOPILOT_OBS_HOST')
-            
-        if os.getenv('OBSCOPILOT_OBS_PORT'):
-            self.config['obs']['port'] = int(os.getenv('OBSCOPILOT_OBS_PORT'))
+            logger.info(f"Exported configuration to {path}")
+        except Exception as e:
+            logger.error(f"Error exporting configuration to .env file: {e}")
+    
+    def to_dict(self) -> Dict[str, Dict[str, Any]]:
+        """Get the configuration as a dictionary.
         
-        # OpenAI
-        if os.getenv('OPENAI_API_KEY'):
-            self.config['openai']['api_key'] = os.getenv('OPENAI_API_KEY') 
+        Returns:
+            Configuration dictionary
+        """
+        return self.config.copy()
+    
+    def __str__(self) -> str:
+        """Get a string representation of the configuration.
+        
+        Returns:
+            String representation of the configuration
+        """
+        return f"Config(path={self.config_path})" 
