@@ -397,6 +397,8 @@ class WorkflowEngine:
             TriggerType.OBS_STREAMING_STOPPED: EventType.OBS_STREAMING_STOPPED,
             TriggerType.OBS_RECORDING_STARTED: EventType.OBS_RECORDING_STARTED,
             TriggerType.OBS_RECORDING_STOPPED: EventType.OBS_RECORDING_STOPPED,
+            # Map CHAT_COMMAND to TWITCH_CHAT_MESSAGE since commands come from chat
+            TriggerType.CHAT_COMMAND: EventType.TWITCH_CHAT_MESSAGE,
         }
         
         return mapping.get(trigger_type)
@@ -426,6 +428,9 @@ class WorkflowEngine:
             EventType.OBS_RECORDING_STOPPED: TriggerType.OBS_RECORDING_STOPPED,
         }
         
+        # Note: We don't map TWITCH_CHAT_MESSAGE to CHAT_COMMAND here,
+        # as the ChatCommandTrigger class handles checking if the message is a command
+        
         return mapping.get(event_type)
     
     async def _handle_event(self, event: Event) -> None:
@@ -441,16 +446,20 @@ class WorkflowEngine:
         if event_type not in self.event_mapping or not self.event_mapping[event_type]:
             return
         
-        # Get the corresponding trigger type
-        trigger_type = self._map_event_type_to_trigger_type(event_type)
-        if not trigger_type:
-            logger.warning(f"No trigger type mapped for event type: {event_type}")
-            return
+        # Get the corresponding trigger types
+        # For TWITCH_CHAT_MESSAGE, we need to check both regular chat message triggers
+        # and chat command triggers if this is a command
+        trigger_types = []
         
-        # Get the trigger class for this trigger type
-        trigger_class = get_trigger_class(trigger_type)
-        if not trigger_class:
-            logger.warning(f"No trigger class found for trigger type: {trigger_type}")
+        if event_type == EventType.TWITCH_CHAT_MESSAGE and event_data.get("is_command", False):
+            trigger_types.append(TriggerType.CHAT_COMMAND)
+        
+        primary_trigger_type = self._map_event_type_to_trigger_type(event_type)
+        if primary_trigger_type:
+            trigger_types.append(primary_trigger_type)
+        
+        if not trigger_types:
+            logger.warning(f"No trigger type mapped for event type: {event_type}")
             return
         
         # Check each workflow registered for this event
@@ -460,17 +469,24 @@ class WorkflowEngine:
             if not workflow or not workflow.enabled:
                 continue
             
-            # Check if any of the workflow's triggers match this event
-            for trigger in workflow.triggers:
-                if trigger.type != trigger_type:
+            # Check each trigger type
+            for trigger_type in trigger_types:
+                # Get the trigger class
+                trigger_class = get_trigger_class(trigger_type)
+                if not trigger_class:
                     continue
                 
-                # Use the specialized trigger class to check if the event matches
-                if trigger_class.matches_event(trigger, event_type, event_data):
-                    # This workflow should be triggered
-                    triggered_workflows.append((workflow, trigger, event_data))
-                    # Break after first matching trigger
-                    break
+                # Check if any of the workflow's triggers match this event
+                for trigger in workflow.triggers:
+                    if trigger.type != trigger_type:
+                        continue
+                    
+                    # Use the specialized trigger class to check if the event matches
+                    if trigger_class.matches_event(trigger, event_type, event_data):
+                        # This workflow should be triggered
+                        triggered_workflows.append((workflow, trigger, event_data))
+                        # Break after first matching trigger for this workflow
+                        break
         
         # Execute all triggered workflows
         for workflow, trigger, data in triggered_workflows:

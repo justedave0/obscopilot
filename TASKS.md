@@ -18,7 +18,7 @@
 - [x] Workflow persistence
 
 ## Phase 4: Advanced Features
-- [ ] Custom chat commands
+- [x] Custom chat commands
 - [ ] Viewer statistics tracking
 - [ ] Alert system
 - [ ] Scene transitions

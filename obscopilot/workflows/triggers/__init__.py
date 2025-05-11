@@ -32,6 +32,7 @@ from .manual_triggers import (
     ManualTrigger,
     HotkeyTrigger
 )
+from .chat_triggers import ChatCommandTrigger
 
 # Register all triggers
 TRIGGER_REGISTRY = {
@@ -44,6 +45,9 @@ TRIGGER_REGISTRY = {
     TriggerType.TWITCH_CHANNEL_POINTS_REDEEM: TwitchChannelPointsRedeemTrigger,
     TriggerType.TWITCH_STREAM_ONLINE: TwitchStreamOnlineTrigger,
     TriggerType.TWITCH_STREAM_OFFLINE: TwitchStreamOfflineTrigger,
+    
+    # Chat command triggers
+    TriggerType.CHAT_COMMAND: ChatCommandTrigger,
     
     # OBS triggers
     TriggerType.OBS_SCENE_CHANGED: ObsSceneChangedTrigger,
@@ -66,19 +70,34 @@ TRIGGER_METADATA = {
     # Twitch triggers
     TriggerType.TWITCH_CHAT_MESSAGE: {
         "name": "Twitch Chat Message",
-        "description": "Triggers when a message is sent in Twitch chat",
+        "description": "Triggered when a message is sent in Twitch chat",
+        "icon": "chat",
         "category": "Twitch",
         "config_schema": {
-            "message_pattern": {"type": "string", "description": "Regex pattern to match messages (optional)"},
-            "user_pattern": {"type": "string", "description": "Regex pattern to match usernames (optional)"},
-            "is_mod_only": {"type": "boolean", "description": "Only trigger on moderator messages", "default": False},
-            "is_sub_only": {"type": "boolean", "description": "Only trigger on subscriber messages", "default": False},
-            "is_broadcaster_only": {"type": "boolean", "description": "Only trigger on broadcaster messages", "default": False},
-            "channel": {"type": "string", "description": "Channel to listen to (optional)"}
+            "channel": {"type": "string", "description": "Channel name (leave empty for any channel)"},
+            "username": {"type": "string", "description": "Username (leave empty for any user)"},
+            "message_pattern": {"type": "string", "description": "Regex pattern to match message content"}
         }
     },
     
-    # Add metadata for other trigger types as needed...
+    # Add metadata for other trigger types as needed
+    
+    # Chat command triggers
+    TriggerType.CHAT_COMMAND: {
+        "name": "Chat Command",
+        "description": "Triggered when a specific chat command is used",
+        "icon": "bolt",
+        "category": "Twitch",
+        "config_schema": {
+            "command_name": {"type": "string", "description": "Command name (without prefix)", "required": True},
+            "arg_pattern": {"type": "string", "description": "Regex pattern to match command arguments"},
+            "required_permission": {
+                "type": "string", 
+                "description": "Required permission to use command", 
+                "enum": ["broadcaster", "mod", "vip", "sub", ""]
+            }
+        }
+    },
 }
 
 def get_trigger_class(trigger_type: TriggerType):

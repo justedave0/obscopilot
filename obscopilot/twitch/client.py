@@ -6,6 +6,7 @@ This module provides Twitch API integration using TwitchIO.
 
 import asyncio
 import logging
+import time
 from typing import Dict, List, Optional, Union, Callable, Any
 
 import twitchio
@@ -17,6 +18,7 @@ from obscopilot.core.config import Config
 from obscopilot.core.events import Event, EventType, event_bus
 from obscopilot.storage.repositories import TwitchAuthRepository
 from obscopilot.twitch.auth import TwitchAuthManager
+from obscopilot.twitch.commands import command_registry
 
 logger = logging.getLogger(__name__)
 
@@ -262,6 +264,74 @@ class TwitchClient:
         except Exception as e:
             logger.error(f"Error getting stream info: {e}")
             return None
+
+    async def _handle_message(self, message):
+        """Handle a chat message.
+        
+        Args:
+            message: Message data from Twitch
+        """
+        try:
+            # Extract message data
+            channel = message.channel.name.lower() if hasattr(message, 'channel') else None
+            username = message.author.name.lower() if hasattr(message, 'author') else None
+            user_id = message.author.id if hasattr(message, 'author') else None
+            content = message.content if hasattr(message, 'content') else None
+            is_mod = message.author.is_mod if hasattr(message, 'author') else False
+            is_sub = message.author.is_subscriber if hasattr(message, 'author') else False
+            is_vip = message.author.is_vip if hasattr(message, 'author') else False
+            is_broadcaster = (
+                username == self.broadcaster_login.lower() if username and self.broadcaster_login else False
+            )
+            
+            if not channel or not username or not content:
+                logger.warning("Incomplete chat message data")
+                return
+            
+            logger.debug(f"{username} in {channel}: {content}")
+            
+            # Prepare event data
+            event_data = {
+                "channel": channel,
+                "username": username,
+                "user_id": user_id,
+                "message": content,
+                "is_mod": is_mod,
+                "is_sub": is_sub,
+                "is_vip": is_vip,
+                "is_broadcaster": is_broadcaster,
+                "raw_message": message,
+            }
+            
+            # Check for command
+            user_data = {
+                "username": username,
+                "user_id": user_id,
+                "is_mod": is_mod,
+                "is_sub": is_sub,
+                "is_vip": is_vip,
+                "is_broadcaster": is_broadcaster,
+            }
+            command = command_registry.handle_message(content, user_data, time.time())
+            
+            if command:
+                # Add command info to event data
+                event_data["is_command"] = True
+                event_data["command"] = command.name
+                
+                # Parse command args
+                _, args = command_registry.parse_command(content)
+                event_data["command_args"] = args
+            else:
+                event_data["is_command"] = False
+                event_data["command"] = None
+                event_data["command_args"] = None
+            
+            # Emit chat message event
+            event_bus.emit(EventType.TWITCH_CHAT_MESSAGE, event_data)
+            
+        except Exception as e:
+            logger.error(f"Error handling chat message: {e}")
 
 
 class OBSCopilotBot(Bot):

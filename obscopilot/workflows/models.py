@@ -30,6 +30,9 @@ class TriggerType(str, Enum):
     TWITCH_STREAM_ONLINE = "twitch_stream_online"
     TWITCH_STREAM_OFFLINE = "twitch_stream_offline"
     
+    # Chat command triggers
+    CHAT_COMMAND = "chat_command"
+    
     # OBS triggers
     OBS_SCENE_CHANGED = "obs_scene_changed"
     OBS_STREAMING_STARTED = "obs_streaming_started"
