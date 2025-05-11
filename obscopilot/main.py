@@ -25,6 +25,7 @@ from obscopilot.twitch.client import TwitchClient
 from obscopilot.obs.client import OBSClient
 from obscopilot.workflows.engine import WorkflowEngine
 from obscopilot.ai.openai import OpenAIClient
+from obscopilot.ai.googleai import GoogleAIClient
 
 logger = logging.getLogger(__name__)
 
@@ -123,10 +124,15 @@ async def async_main(config_path: str = None, verbosity: int = 0) -> int:
         openai_client = OpenAIClient(config)
         components.append(openai_client)
         
+        # Initialize Google AI client
+        googleai_client = GoogleAIClient(config)
+        components.append(googleai_client)
+        
         # Initialize workflow engine
         workflow_engine = WorkflowEngine(
             config, workflow_repo, trigger_repo, action_repo, 
-            workflow_execution_repo, twitch_client, obs_client, openai_client
+            workflow_execution_repo, twitch_client, obs_client, openai_client,
+            googleai_client
         )
         components.append(workflow_engine)
         
@@ -139,7 +145,7 @@ async def async_main(config_path: str = None, verbosity: int = 0) -> int:
         # Set dependencies
         main_window.set_dependencies(
             database, twitch_client, obs_client, workflow_engine,
-            openai_client, workflow_repo, setting_repo, twitch_auth_repo
+            openai_client, googleai_client, workflow_repo, setting_repo, twitch_auth_repo
         )
         
         # Show main window

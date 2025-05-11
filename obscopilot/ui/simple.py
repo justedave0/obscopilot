@@ -415,7 +415,26 @@ class SimpleMainWindow(QMainWindow):
         self.model_combo.setCurrentText(current_model if current_model in models else models[0])
         openai_layout.addRow("Model:", self.model_combo)
         
+        # Google AI settings
+        googleai_group = QGroupBox("Google AI Settings")
+        googleai_layout = QFormLayout(googleai_group)
+        
+        # API key
+        self.googleai_key_edit = QLineEdit()
+        self.googleai_key_edit.setText(self.config.get("googleai", "api_key", ""))
+        self.googleai_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        googleai_layout.addRow("API Key:", self.googleai_key_edit)
+        
+        # Model selection
+        self.googleai_model_combo = QComboBox()
+        googleai_models = ["gemini-2.0-flash-001", "gemini-2.0-pro-001", "gemini-2.0-pro-vision-001"]
+        self.googleai_model_combo.addItems(googleai_models)
+        current_googleai_model = self.config.get("googleai", "model", "gemini-2.0-flash-001")
+        self.googleai_model_combo.setCurrentText(current_googleai_model if current_googleai_model in googleai_models else googleai_models[0])
+        googleai_layout.addRow("Model:", self.googleai_model_combo)
+        
         settings_form.addWidget(openai_group)
+        settings_form.addWidget(googleai_group)
         
         # Add buttons
         button_container = QWidget()
@@ -457,6 +476,10 @@ class SimpleMainWindow(QMainWindow):
         self.config.set("openai", "api_key", self.openai_key_edit.text())
         self.config.set("openai", "model", self.model_combo.currentText())
         
+        # Google AI settings
+        self.config.set("googleai", "api_key", self.googleai_key_edit.text())
+        self.config.set("googleai", "model", self.googleai_model_combo.currentText())
+        
         # Save to file
         self.config.save()
         
@@ -486,6 +509,8 @@ class SimpleMainWindow(QMainWindow):
             self.obs_password_edit.setText(self.config.get("obs", "password", ""))
             self.openai_key_edit.setText(self.config.get("openai", "api_key", ""))
             self.model_combo.setCurrentText(self.config.get("openai", "model", "gpt-3.5-turbo"))
+            self.googleai_key_edit.setText(self.config.get("googleai", "api_key", ""))
+            self.googleai_model_combo.setCurrentText(self.config.get("googleai", "model", "gemini-2.0-flash-001"))
             
             # Apply theme
             self._on_theme_changed(self.config.get("general", "theme", "dark"))

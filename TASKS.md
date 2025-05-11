@@ -10,6 +10,7 @@
 - [x] Twitch authentication and event handling
 - [x] OBS WebSocket integration
 - [x] OpenAI API integration
+- [x] Google AI API integration
 
 ## Phase 3: Workflow Engine
 - [x] Workflow model implementation

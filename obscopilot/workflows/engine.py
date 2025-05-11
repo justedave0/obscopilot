@@ -17,6 +17,8 @@ from obscopilot.core.config import Config
 from obscopilot.core.events import Event, EventBus, EventType, event_bus
 from obscopilot.twitch.client import TwitchClient
 from obscopilot.obs.client import OBSClient
+from obscopilot.ai.openai import OpenAIClient
+from obscopilot.ai.googleai import GoogleAIClient
 from obscopilot.workflows.models import (
     ActionType, 
     Workflow, 
@@ -122,24 +124,41 @@ class WorkflowEngine:
     
     def __init__(
         self, 
-        config: Config, 
+        config: Config,
+        workflow_repo,
+        trigger_repo,
+        action_repo,
+        workflow_execution_repo,
         twitch_client: TwitchClient, 
-        obs_client: OBSClient
+        obs_client: OBSClient,
+        openai_client: OpenAIClient,
+        googleai_client: GoogleAIClient
     ):
         """Initialize workflow engine.
         
         Args:
             config: Application configuration
+            workflow_repo: Workflow repository
+            trigger_repo: Trigger repository
+            action_repo: Action repository
+            workflow_execution_repo: Workflow execution repository
             twitch_client: Twitch API client
             obs_client: OBS WebSocket client
+            openai_client: OpenAI client
+            googleai_client: Google AI client
         """
         self.config = config
+        self.workflow_repo = workflow_repo
+        self.trigger_repo = trigger_repo
+        self.action_repo = action_repo
+        self.workflow_execution_repo = workflow_execution_repo
         self.twitch_client = twitch_client
         self.obs_client = obs_client
+        self.openai_client = openai_client
+        self.googleai_client = googleai_client
         self.event_bus = event_bus
         self.workflows: Dict[str, Workflow] = {}
         self.event_mapping: Dict[EventType, List[str]] = {}  # Maps event types to workflow IDs
-        self.repository = WorkflowRepository()
         self._register_event_handlers()
         self._setup_action_handlers()
     
@@ -733,9 +752,72 @@ class WorkflowEngine:
         Returns:
             Generated response or None on error
         """
-        # Not implemented yet
-        logger.warning("AI_GENERATE_RESPONSE action not implemented")
-        return None
+        try:
+            config = action.config
+            
+            # Get prompt
+            prompt = context.resolve_template(config.get("prompt", ""), context)
+            if not prompt:
+                logger.warning("No prompt provided for AI response generation")
+                return None
+            
+            # Get system message
+            system_message = config.get("system_message", "")
+            if system_message:
+                system_message = context.resolve_template(system_message, context)
+            
+            # Get AI provider
+            ai_provider = config.get("ai_provider", "openai").lower()
+            
+            # Get model
+            model = config.get("model", "")
+            
+            # Get temperature
+            temperature = float(config.get("temperature", 0.7))
+            
+            # Get max tokens
+            max_tokens = int(config.get("max_tokens", 150))
+            
+            # Generate response
+            logger.info(f"Generating AI response using provider: {ai_provider}")
+            
+            if ai_provider == "openai":
+                # Use OpenAI
+                if not self.openai_client:
+                    logger.error("OpenAI client not available")
+                    return None
+                
+                response = await self.openai_client.generate_response(
+                    prompt=prompt,
+                    system_prompt=system_message if system_message else None,
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+            elif ai_provider == "googleai":
+                # Use Google AI
+                if not self.googleai_client:
+                    logger.error("Google AI client not available")
+                    return None
+                
+                response = await self.googleai_client.generate_response(
+                    prompt=prompt,
+                    system_prompt=system_message if system_message else None,
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+            else:
+                logger.error(f"Unsupported AI provider: {ai_provider}")
+                return None
+            
+            # Store response in context variables
+            if response:
+                context.set_variable("ai_response", response)
+                context.set_variable(f"ai_response_{action.id}", response)
+            
+            return response
+        except Exception as e:
+            logger.error(f"Error in _handle_ai_generate_response: {e}")
+            return None
     
     async def _handle_delay(self, action: WorkflowAction, context: WorkflowContext) -> None:
         """Handle DELAY action.

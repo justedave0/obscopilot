@@ -25,6 +25,7 @@ from obscopilot.twitch.client import TwitchClient
 from obscopilot.obs.client import OBSClient
 from obscopilot.workflows.engine import WorkflowEngine
 from obscopilot.ai.openai import OpenAIClient
+from obscopilot.ai.googleai import GoogleAIClient
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,7 @@ class MainWindow(QMainWindow):
         self.obs_client = None
         self.workflow_engine = None
         self.openai_client = None
+        self.googleai_client = None
         self.workflow_repo = None
         self.setting_repo = None
         self.twitch_auth_repo = None
@@ -143,6 +145,7 @@ class MainWindow(QMainWindow):
         obs_client: OBSClient,
         workflow_engine: WorkflowEngine,
         openai_client: OpenAIClient,
+        googleai_client: GoogleAIClient,
         workflow_repo: WorkflowRepository,
         setting_repo: SettingRepository,
         twitch_auth_repo: TwitchAuthRepository
@@ -155,6 +158,7 @@ class MainWindow(QMainWindow):
             obs_client: OBS client instance
             workflow_engine: Workflow engine instance
             openai_client: OpenAI client instance
+            googleai_client: Google AI client instance
             workflow_repo: Workflow repository instance
             setting_repo: Setting repository instance
             twitch_auth_repo: Twitch authentication repository instance
@@ -164,6 +168,7 @@ class MainWindow(QMainWindow):
         self.obs_client = obs_client
         self.workflow_engine = workflow_engine
         self.openai_client = openai_client
+        self.googleai_client = googleai_client
         self.workflow_repo = workflow_repo
         self.setting_repo = setting_repo
         self.twitch_auth_repo = twitch_auth_repo

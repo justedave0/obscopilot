@@ -18,6 +18,9 @@ pydantic==2.5.2
 # OpenAI Integration
 openai>=1.0.0
 
+# Google AI Integration
+google-genai>=1.0.0
+
 # Storage and Configuration
 sqlalchemy==2.0.40
 alembic==1.12.1

@@ -59,6 +59,14 @@ class Config:
             'max_tokens': 150,
             'max_context_messages': 20,
         },
+        'googleai': {
+            'api_key': '',
+            'model': 'gemini-2.0-flash-001',
+            'vision_model': 'gemini-2.0-pro-vision-001',
+            'temperature': 0.7,
+            'max_tokens': 150,
+            'max_context_messages': 20,
+        },
         'workflows': {
             'auto_load': True,
             'workflow_dir': '',
