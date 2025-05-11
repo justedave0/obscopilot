@@ -12,8 +12,8 @@
 - [x] OpenAI API integration
 
 ## Phase 3: Workflow Engine
-- [ ] Workflow model implementation
-- [ ] Trigger system
+- [x] Workflow model implementation
+- [x] Trigger system
 - [ ] Action system
 - [ ] Workflow persistence
 

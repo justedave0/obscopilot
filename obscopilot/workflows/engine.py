@@ -10,7 +10,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Union, Type
 
 from obscopilot.core.config import Config
 from obscopilot.core.events import Event, EventBus, EventType, event_bus
@@ -22,8 +22,11 @@ from obscopilot.workflows.models import (
     WorkflowAction, 
     WorkflowNode, 
     WorkflowTrigger, 
-    TriggerType
+    TriggerType,
+    WorkflowContext
 )
+from obscopilot.workflows.triggers import get_trigger_class, get_trigger_metadata
+from obscopilot.workflows.actions import get_action_class
 
 logger = logging.getLogger(__name__)
 
@@ -265,17 +268,36 @@ class WorkflowEngine:
         Args:
             workflow: Workflow to register
         """
+        # Make sure the workflow is enabled
+        if not workflow.enabled:
+            logger.info(f"Skipping disabled workflow: {workflow.name} ({workflow.id})")
+            return
+        
         # Add workflow to registry
         self.workflows[workflow.id] = workflow
         
-        # Map event types to workflow IDs for quick lookup
+        # Register triggers
         for trigger in workflow.triggers:
+            # Prepare the trigger
+            trigger_class = get_trigger_class(trigger.type)
+            if trigger_class:
+                try:
+                    # Call prepare method to set up any compiled patterns or caches
+                    trigger_class.prepare(trigger)
+                except Exception as e:
+                    logger.error(f"Error preparing trigger {trigger.id} ({trigger.type}): {e}")
+            
+            # Map event type to workflow
             event_type = self._map_trigger_to_event_type(trigger.type)
             if event_type:
                 if event_type not in self.event_mapping:
                     self.event_mapping[event_type] = []
+                
+                # Add workflow ID to the mapping if not already there
                 if workflow.id not in self.event_mapping[event_type]:
                     self.event_mapping[event_type].append(workflow.id)
+                    
+        logger.info(f"Registered workflow: {workflow.name} ({workflow.id})")
     
     def unregister_workflow(self, workflow_id: str) -> bool:
         """Unregister a workflow from the engine.
@@ -355,59 +377,80 @@ class WorkflowEngine:
         return mapping.get(event_type)
     
     async def _handle_event(self, event: Event) -> None:
-        """Handle an event from the event bus.
+        """Handle an event by checking if it triggers any workflows.
         
         Args:
             event: Event to handle
         """
-        # Map event type to trigger type
-        trigger_type = self._map_event_type_to_trigger_type(event.event_type)
+        event_type = event.type
+        event_data = event.data
+        
+        # Skip if no workflows registered for this event
+        if event_type not in self.event_mapping or not self.event_mapping[event_type]:
+            return
+        
+        # Get the corresponding trigger type
+        trigger_type = self._map_event_type_to_trigger_type(event_type)
         if not trigger_type:
+            logger.warning(f"No trigger type mapped for event type: {event_type}")
             return
         
-        # Get workflows that may be triggered by this event
-        workflow_ids = self.event_mapping.get(event.event_type, [])
-        if not workflow_ids:
+        # Get the trigger class for this trigger type
+        trigger_class = get_trigger_class(trigger_type)
+        if not trigger_class:
+            logger.warning(f"No trigger class found for trigger type: {trigger_type}")
             return
         
-        # Check which workflows should be triggered
-        for workflow_id in workflow_ids:
+        # Check each workflow registered for this event
+        triggered_workflows = []
+        for workflow_id in self.event_mapping[event_type]:
             workflow = self.workflows.get(workflow_id)
             if not workflow or not workflow.enabled:
                 continue
             
-            # Check if any trigger matches this event
+            # Check if any of the workflow's triggers match this event
             for trigger in workflow.triggers:
-                if trigger.type == trigger_type and trigger.matches_event(trigger_type, event.data or {}):
-                    # Execute workflow
-                    asyncio.create_task(self.execute_workflow(workflow, event.data or {}))
+                if trigger.type != trigger_type:
+                    continue
+                
+                # Use the specialized trigger class to check if the event matches
+                if trigger_class.matches_event(trigger, event_type, event_data):
+                    # This workflow should be triggered
+                    triggered_workflows.append((workflow, trigger, event_data))
+                    # Break after first matching trigger
                     break
+        
+        # Execute all triggered workflows
+        for workflow, trigger, data in triggered_workflows:
+            logger.info(f"Executing workflow '{workflow.name}' triggered by {trigger.type}")
+            asyncio.create_task(self.execute_workflow(workflow, data, trigger))
     
-    async def execute_workflow(self, workflow: Workflow, trigger_data: Dict[str, Any]) -> bool:
+    async def execute_workflow(
+        self, 
+        workflow: Workflow, 
+        trigger_data: Dict[str, Any], 
+        trigger: Optional[WorkflowTrigger] = None
+    ) -> bool:
         """Execute a workflow.
         
         Args:
             workflow: Workflow to execute
             trigger_data: Data from the trigger event
+            trigger: The trigger that initiated this workflow (optional)
             
         Returns:
-            True if workflow executed successfully, False otherwise
+            True if workflow execution completed successfully, False otherwise
         """
         try:
-            logger.info(f"Executing workflow: {workflow.name} ({workflow.id})")
+            # Create workflow context
+            context = workflow.create_context(trigger_data)
             
-            # Create execution context
-            context = WorkflowContext(workflow, trigger_data)
-            
-            # Emit workflow started event
-            await self.event_bus.emit(Event(
-                EventType.WORKFLOW_STARTED,
-                {
-                    'workflow_id': workflow.id,
-                    'workflow_name': workflow.name,
-                    'trigger_data': trigger_data
-                }
-            ))
+            # Record execution time for time-based triggers
+            if trigger:
+                if "_last_run" not in trigger.config:
+                    trigger.config["_last_run"] = time.time()
+                else:
+                    trigger.config["_last_run"] = time.time()
             
             # Get entry node
             entry_node = workflow.get_entry_node()
@@ -415,36 +458,21 @@ class WorkflowEngine:
                 logger.error(f"Workflow has no entry node: {workflow.name} ({workflow.id})")
                 return False
             
-            # Execute workflow starting from entry node
-            result = await self._execute_node(entry_node, context)
-            
-            # Emit workflow completed event
-            await self.event_bus.emit(Event(
-                EventType.WORKFLOW_COMPLETED,
-                {
-                    'workflow_id': workflow.id,
-                    'workflow_name': workflow.name,
-                    'execution_time': context.get_execution_time(),
-                    'execution_path': context.execution_path,
-                    'result': result
-                }
-            ))
-            
-            logger.info(f"Workflow executed successfully: {workflow.name} ({workflow.id})")
-            return True
+            # Execute entry node and follow the execution path
+            try:
+                # Add entry node to execution path
+                context.add_to_execution_path(entry_node.id)
+                
+                # Execute the entry node
+                await self._execute_node(entry_node, context)
+                
+                logger.info(f"Workflow '{workflow.name}' executed successfully")
+                return True
+            except Exception as e:
+                logger.error(f"Error executing workflow '{workflow.name}': {e}")
+                return False
         except Exception as e:
-            logger.error(f"Error executing workflow {workflow.name} ({workflow.id}): {e}")
-            
-            # Emit workflow failed event
-            await self.event_bus.emit(Event(
-                EventType.WORKFLOW_FAILED,
-                {
-                    'workflow_id': workflow.id,
-                    'workflow_name': workflow.name,
-                    'error': str(e)
-                }
-            ))
-            
+            logger.error(f"Error setting up workflow execution for '{workflow.name}': {e}")
             return False
     
     async def _execute_node(self, node: WorkflowNode, context: WorkflowContext) -> Any:
