@@ -12,12 +12,13 @@ from enum import Enum
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QColorDialog, QGridLayout, QFrame, QDialogButtonBox,
-    QGroupBox, QComboBox, QScrollArea
+    QGroupBox, QComboBox, QScrollArea, QWidget, QFormLayout,
+    QTabWidget, QLineEdit, QTextEdit, QMessageBox, QSizePolicy
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor, QPalette, QFont
 
-from obscopilot.ui.themes import ThemeType, get_theme_manager
+from obscopilot.ui.themes import ThemeType, get_theme_manager, Theme
 from obscopilot.core.config import Config
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,24 @@ class ColorRole(Enum):
     HIGHLIGHT = "highlight"
     HIGHLIGHTED_TEXT = "highlighted_text"
     LINK = "link"
+    WINDOW_BACKGROUND = "window_background"
+    ACCENT_PRIMARY = "accent_primary"
+    ACCENT_SECONDARY = "accent_secondary"
+    ACCENT_SUCCESS = "accent_success"
+    ACCENT_WARNING = "accent_warning"
+    ACCENT_ERROR = "accent_error"
+    TAB_BACKGROUND = "tab_background"
+    TAB_TEXT = "tab_text"
+    TAB_SELECTED_BACKGROUND = "tab_selected_background"
+    TAB_SELECTED_TEXT = "tab_selected_text"
+    MENU_BACKGROUND = "menu_background"
+    MENU_TEXT = "menu_text"
+    MENU_SELECTED_BACKGROUND = "menu_selected_background"
+    MENU_SELECTED_TEXT = "menu_selected_text"
+    STATUS_BACKGROUND = "status_background"
+    STATUS_TEXT = "status_text"
+    WORKFLOW_ITEM_BACKGROUND = "workflow_item_background"
+    WORKFLOW_ITEM_ALT_BACKGROUND = "workflow_item_alt_background"
     
     @staticmethod
     def to_palette_role(role: 'ColorRole') -> QPalette.ColorRole:
@@ -57,7 +76,25 @@ class ColorRole(Enum):
             ColorRole.BUTTON_TEXT: QPalette.ColorRole.ButtonText,
             ColorRole.HIGHLIGHT: QPalette.ColorRole.Highlight,
             ColorRole.HIGHLIGHTED_TEXT: QPalette.ColorRole.HighlightedText,
-            ColorRole.LINK: QPalette.ColorRole.Link
+            ColorRole.LINK: QPalette.ColorRole.Link,
+            ColorRole.WINDOW_BACKGROUND: QPalette.ColorRole.Window,
+            ColorRole.ACCENT_PRIMARY: QPalette.ColorRole.Button,
+            ColorRole.ACCENT_SECONDARY: QPalette.ColorRole.Button,
+            ColorRole.ACCENT_SUCCESS: QPalette.ColorRole.Button,
+            ColorRole.ACCENT_WARNING: QPalette.ColorRole.Button,
+            ColorRole.ACCENT_ERROR: QPalette.ColorRole.Button,
+            ColorRole.TAB_BACKGROUND: QPalette.ColorRole.Window,
+            ColorRole.TAB_TEXT: QPalette.ColorRole.WindowText,
+            ColorRole.TAB_SELECTED_BACKGROUND: QPalette.ColorRole.Button,
+            ColorRole.TAB_SELECTED_TEXT: QPalette.ColorRole.ButtonText,
+            ColorRole.MENU_BACKGROUND: QPalette.ColorRole.Window,
+            ColorRole.MENU_TEXT: QPalette.ColorRole.WindowText,
+            ColorRole.MENU_SELECTED_BACKGROUND: QPalette.ColorRole.Button,
+            ColorRole.MENU_SELECTED_TEXT: QPalette.ColorRole.ButtonText,
+            ColorRole.STATUS_BACKGROUND: QPalette.ColorRole.Window,
+            ColorRole.STATUS_TEXT: QPalette.ColorRole.WindowText,
+            ColorRole.WORKFLOW_ITEM_BACKGROUND: QPalette.ColorRole.Window,
+            ColorRole.WORKFLOW_ITEM_ALT_BACKGROUND: QPalette.ColorRole.Window
         }
         return mapping.get(role, QPalette.ColorRole.Window)
     
@@ -81,7 +118,25 @@ class ColorRole(Enum):
             ColorRole.BUTTON_TEXT: "Button Text",
             ColorRole.HIGHLIGHT: "Highlight",
             ColorRole.HIGHLIGHTED_TEXT: "Highlighted Text",
-            ColorRole.LINK: "Link"
+            ColorRole.LINK: "Link",
+            ColorRole.WINDOW_BACKGROUND: "Window Background",
+            ColorRole.ACCENT_PRIMARY: "Accent Primary",
+            ColorRole.ACCENT_SECONDARY: "Accent Secondary",
+            ColorRole.ACCENT_SUCCESS: "Success",
+            ColorRole.ACCENT_WARNING: "Warning",
+            ColorRole.ACCENT_ERROR: "Error",
+            ColorRole.TAB_BACKGROUND: "Tab Background",
+            ColorRole.TAB_TEXT: "Tab Text",
+            ColorRole.TAB_SELECTED_BACKGROUND: "Tab Selected Background",
+            ColorRole.TAB_SELECTED_TEXT: "Tab Selected Text",
+            ColorRole.MENU_BACKGROUND: "Menu Background",
+            ColorRole.MENU_TEXT: "Menu Text",
+            ColorRole.MENU_SELECTED_BACKGROUND: "Menu Selected Background",
+            ColorRole.MENU_SELECTED_TEXT: "Menu Selected Text",
+            ColorRole.STATUS_BACKGROUND: "Status Bar Background",
+            ColorRole.STATUS_TEXT: "Status Bar Text",
+            ColorRole.WORKFLOW_ITEM_BACKGROUND: "Workflow Item Background",
+            ColorRole.WORKFLOW_ITEM_ALT_BACKGROUND: "Workflow Item Alt Background"
         }
         return mapping.get(role, role.value.replace('_', ' ').title())
 
@@ -137,6 +192,589 @@ class ColorSwatch(QFrame):
         """
         self.clicked.emit()
         super().mousePressEvent(event)
+
+
+class ColorPickerButton(QPushButton):
+    """Custom button for color picking."""
+    
+    color_changed = pyqtSignal(str, QColor)
+    
+    def __init__(self, color_role: str, color: str, label: str, parent=None):
+        """Initialize color picker button.
+        
+        Args:
+            color_role: Color role identifier
+            color: Initial color (hex format)
+            label: Label text
+            parent: Parent widget
+        """
+        super().__init__(parent)
+        self.color_role = color_role
+        self.color = QColor(color)
+        self.label = label
+        
+        self.setAutoFillBackground(True)
+        self.setFixedSize(30, 30)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        self.update_color()
+        self.clicked.connect(self.pick_color)
+    
+    def update_color(self):
+        """Update button color display."""
+        # Set background color
+        palette = self.palette()
+        palette.setColor(QPalette.ColorRole.Button, self.color)
+        self.setPalette(palette)
+        
+        # Set tooltip
+        self.setToolTip(f"{self.label}: {self.color.name()}")
+    
+    def pick_color(self):
+        """Show color picker dialog."""
+        color = QColorDialog.getColor(
+            self.color, 
+            self.parent(),
+            f"Select Color for {self.label}",
+            QColorDialog.ColorDialogOption.ShowAlphaChannel
+        )
+        
+        if color.isValid():
+            self.color = color
+            self.update_color()
+            self.color_changed.emit(self.color_role, self.color)
+
+
+class ThemeEditorDialog(QDialog):
+    """Dialog for creating or editing a theme."""
+    
+    def __init__(self, theme: Optional[Theme] = None, parent=None):
+        """Initialize theme editor dialog.
+        
+        Args:
+            theme: Theme to edit, or None for a new theme
+            parent: Parent widget
+        """
+        super().__init__(parent)
+        self.theme = theme or Theme(
+            name="New Theme",
+            type=ThemeType.CUSTOM,
+            colors=get_theme_manager().dark_theme.colors.copy(),
+            description="Custom theme"
+        )
+        
+        self.color_buttons: Dict[str, ColorPickerButton] = {}
+        
+        self.setWindowTitle(f"{'Edit' if theme else 'Create'} Theme")
+        self.resize(800, 600)
+        
+        self._init_ui()
+    
+    def _init_ui(self):
+        """Initialize UI components."""
+        layout = QVBoxLayout(self)
+        
+        # Theme details form
+        details_group = QGroupBox("Theme Details")
+        details_layout = QFormLayout(details_group)
+        
+        # Theme name
+        self.name_edit = QLineEdit(self.theme.name)
+        details_layout.addRow("Name:", self.name_edit)
+        
+        # Theme description
+        self.description_edit = QTextEdit(self.theme.description)
+        self.description_edit.setMaximumHeight(80)
+        details_layout.addRow("Description:", self.description_edit)
+        
+        # Add details group to main layout
+        layout.addWidget(details_group)
+        
+        # Create tabbed interface for color categories
+        color_tabs = QTabWidget()
+        
+        # Main colors tab
+        main_tab = QWidget()
+        main_layout = QFormLayout(main_tab)
+        self._add_color_pickers(main_layout, [
+            (ColorRole.WINDOW_BACKGROUND, "Window Background"),
+            (ColorRole.WINDOW_TEXT, "Window Text"),
+            (ColorRole.ACCENT_PRIMARY, "Accent Primary"),
+            (ColorRole.ACCENT_SECONDARY, "Accent Secondary"),
+            (ColorRole.ACCENT_SUCCESS, "Success"),
+            (ColorRole.ACCENT_WARNING, "Warning"),
+            (ColorRole.ACCENT_ERROR, "Error")
+        ])
+        color_tabs.addTab(main_tab, "Main Colors")
+        
+        # Controls tab
+        controls_tab = QWidget()
+        controls_layout = QFormLayout(controls_tab)
+        self._add_color_pickers(controls_layout, [
+            (ColorRole.BUTTON_BACKGROUND, "Button Background"),
+            (ColorRole.BUTTON_TEXT, "Button Text"),
+            (ColorRole.BUTTON_HOVER, "Button Hover"),
+            (ColorRole.BUTTON_PRESSED, "Button Pressed"),
+            (ColorRole.INPUT_BACKGROUND, "Input Background"),
+            (ColorRole.INPUT_TEXT, "Input Text"),
+            (ColorRole.INPUT_BORDER, "Input Border")
+        ])
+        color_tabs.addTab(controls_tab, "Controls")
+        
+        # Navigation tab
+        nav_tab = QWidget()
+        nav_layout = QFormLayout(nav_tab)
+        self._add_color_pickers(nav_layout, [
+            (ColorRole.TAB_BACKGROUND, "Tab Background"),
+            (ColorRole.TAB_TEXT, "Tab Text"),
+            (ColorRole.TAB_SELECTED_BACKGROUND, "Tab Selected Background"),
+            (ColorRole.TAB_SELECTED_TEXT, "Tab Selected Text"),
+            (ColorRole.MENU_BACKGROUND, "Menu Background"),
+            (ColorRole.MENU_TEXT, "Menu Text"),
+            (ColorRole.MENU_SELECTED_BACKGROUND, "Menu Selected Background"),
+            (ColorRole.MENU_SELECTED_TEXT, "Menu Selected Text"),
+            (ColorRole.STATUS_BACKGROUND, "Status Bar Background"),
+            (ColorRole.STATUS_TEXT, "Status Bar Text")
+        ])
+        color_tabs.addTab(nav_tab, "Navigation")
+        
+        # Workflow tab
+        workflow_tab = QWidget()
+        workflow_layout = QFormLayout(workflow_tab)
+        self._add_color_pickers(workflow_layout, [
+            (ColorRole.WORKFLOW_ITEM_BACKGROUND, "Workflow Item Background"),
+            (ColorRole.WORKFLOW_ITEM_ALT_BACKGROUND, "Workflow Item Alt Background")
+        ])
+        color_tabs.addTab(workflow_tab, "Workflow")
+        
+        # Add preview
+        preview_group = QGroupBox("Preview")
+        preview_layout = QVBoxLayout(preview_group)
+        
+        self.preview_widget = QWidget()
+        self.preview_widget.setAutoFillBackground(True)
+        self.preview_widget.setMinimumHeight(120)
+        preview_inner_layout = QVBoxLayout(self.preview_widget)
+        
+        preview_title = QLabel("Theme Preview")
+        preview_title.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+        preview_inner_layout.addWidget(preview_title)
+        
+        preview_text = QLabel("This is how your theme will look in the application.")
+        preview_inner_layout.addWidget(preview_text)
+        
+        preview_button = QPushButton("Sample Button")
+        preview_button_layout = QHBoxLayout()
+        preview_button_layout.addWidget(preview_button)
+        preview_button_layout.addStretch()
+        preview_inner_layout.addLayout(preview_button_layout)
+        
+        preview_layout.addWidget(self.preview_widget)
+        
+        # Add color tabs
+        layout.addWidget(color_tabs)
+        
+        # Add preview
+        layout.addWidget(preview_group)
+        
+        # Buttons
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save |
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        
+        # Add buttons
+        layout.addWidget(button_box)
+        
+        # Update preview initially
+        self._update_preview()
+    
+    def _add_color_pickers(self, layout: QFormLayout, color_roles: List[Tuple[str, str]]):
+        """Add color pickers to layout.
+        
+        Args:
+            layout: Layout to add pickers to
+            color_roles: List of (role, label) tuples
+        """
+        for role, label in color_roles:
+            # Get current color
+            color = self.theme.colors.get(role, "#000000")
+            
+            # Create color picker button
+            button = ColorPickerButton(role, color, label)
+            button.color_changed.connect(self._on_color_changed)
+            
+            # Add to layout with label
+            layout.addRow(f"{label}:", button)
+            
+            # Store button reference
+            self.color_buttons[role] = button
+    
+    def _on_color_changed(self, role: str, color: QColor):
+        """Handle color change.
+        
+        Args:
+            role: Color role
+            color: New color
+        """
+        # Update theme colors
+        self.theme.colors[role] = color.name()
+        
+        # Update preview
+        self._update_preview()
+    
+    def _update_preview(self):
+        """Update preview widget with current theme colors."""
+        # Set preview widget background color
+        palette = self.preview_widget.palette()
+        palette.setColor(
+            QPalette.ColorRole.Window,
+            QColor(self.theme.colors.get(ColorRole.WINDOW_BACKGROUND, "#2D2D30"))
+        )
+        
+        # Set text color
+        palette.setColor(
+            QPalette.ColorRole.WindowText,
+            QColor(self.theme.colors.get(ColorRole.WINDOW_TEXT, "#E1E1E1"))
+        )
+        
+        self.preview_widget.setPalette(palette)
+    
+    def get_theme(self) -> Theme:
+        """Get the edited theme.
+        
+        Returns:
+            Updated theme
+        """
+        # Update theme with form values
+        self.theme.name = self.name_edit.text()
+        self.theme.description = self.description_edit.toPlainText()
+        
+        return self.theme
+
+
+class ThemeCustomizerWidget(QWidget):
+    """Widget for customizing themes."""
+    
+    theme_changed = pyqtSignal(ThemeType, str)
+    
+    def __init__(self, parent=None):
+        """Initialize theme customizer widget.
+        
+        Args:
+            parent: Parent widget
+        """
+        super().__init__(parent)
+        self.theme_manager = get_theme_manager()
+        
+        self._init_ui()
+        self._load_themes()
+    
+    def _init_ui(self):
+        """Initialize UI components."""
+        layout = QVBoxLayout(self)
+        
+        # Theme selection
+        selection_layout = QHBoxLayout()
+        
+        selection_layout.addWidget(QLabel("Current Theme:"))
+        self.theme_combo = QComboBox()
+        selection_layout.addWidget(self.theme_combo)
+        
+        layout.addLayout(selection_layout)
+        
+        # Custom themes section
+        custom_group = QGroupBox("Custom Themes")
+        custom_layout = QVBoxLayout(custom_group)
+        
+        # Themes list
+        self.themes_list = QScrollArea()
+        self.themes_list.setWidgetResizable(True)
+        self.themes_list.setFrameShape(QFrame.Shape.NoFrame)
+        self.themes_list_widget = QWidget()
+        self.themes_list_layout = QVBoxLayout(self.themes_list_widget)
+        self.themes_list_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.themes_list.setWidget(self.themes_list_widget)
+        
+        custom_layout.addWidget(self.themes_list)
+        
+        # Custom theme buttons
+        buttons_layout = QHBoxLayout()
+        self.create_button = QPushButton("Create Theme")
+        self.create_button.clicked.connect(self._on_create_theme)
+        buttons_layout.addWidget(self.create_button)
+        
+        self.import_button = QPushButton("Import Theme")
+        self.import_button.clicked.connect(self._on_import_theme)
+        buttons_layout.addWidget(self.import_button)
+        
+        buttons_layout.addStretch()
+        
+        custom_layout.addLayout(buttons_layout)
+        
+        layout.addWidget(custom_group)
+        
+        # Connect signals
+        self.theme_combo.currentIndexChanged.connect(self._on_theme_selection_changed)
+    
+    def _load_themes(self):
+        """Load available themes."""
+        # Clear current items
+        self.theme_combo.clear()
+        
+        # Add built-in themes
+        self.theme_combo.addItem("Dark Theme", (ThemeType.DARK, None))
+        self.theme_combo.addItem("Light Theme", (ThemeType.LIGHT, None))
+        
+        # Add custom themes
+        for theme_name in self.theme_manager.custom_themes:
+            self.theme_combo.addItem(f"{theme_name} (Custom)", (ThemeType.CUSTOM, theme_name))
+            
+        # Set current theme
+        current_theme = self.theme_manager.current_theme
+        if current_theme == ThemeType.DARK:
+            self.theme_combo.setCurrentIndex(0)
+        elif current_theme == ThemeType.LIGHT:
+            self.theme_combo.setCurrentIndex(1)
+        else:
+            # Find custom theme
+            for i in range(2, self.theme_combo.count()):
+                theme_type, theme_name = self.theme_combo.itemData(i)
+                if theme_type == ThemeType.CUSTOM and theme_name == current_theme:
+                    self.theme_combo.setCurrentIndex(i)
+                    break
+        
+        # Update custom themes list
+        self._refresh_custom_themes_list()
+    
+    def _refresh_custom_themes_list(self):
+        """Refresh the custom themes list."""
+        # Clear current items
+        while self.themes_list_layout.count() > 0:
+            item = self.themes_list_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # Add custom themes
+        for theme_name, theme in self.theme_manager.custom_themes.items():
+            theme_widget = self._create_theme_item_widget(theme)
+            self.themes_list_layout.addWidget(theme_widget)
+        
+        # Add empty state message if no custom themes
+        if not self.theme_manager.custom_themes:
+            empty_label = QLabel("No custom themes available. Create one to get started!")
+            empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.themes_list_layout.addWidget(empty_label)
+    
+    def _create_theme_item_widget(self, theme: Theme) -> QWidget:
+        """Create a widget for a theme item.
+        
+        Args:
+            theme: Theme to create widget for
+            
+        Returns:
+            Widget representing the theme
+        """
+        widget = QFrame()
+        widget.setFrameShape(QFrame.Shape.StyledPanel)
+        widget.setAutoFillBackground(True)
+        
+        # Set theme colors for widget
+        palette = widget.palette()
+        palette.setColor(
+            QPalette.ColorRole.Window,
+            QColor(theme.colors.get(ColorRole.WINDOW_BACKGROUND, "#2D2D30"))
+        )
+        palette.setColor(
+            QPalette.ColorRole.WindowText,
+            QColor(theme.colors.get(ColorRole.WINDOW_TEXT, "#E1E1E1"))
+        )
+        widget.setPalette(palette)
+        
+        # Create layout
+        layout = QHBoxLayout(widget)
+        
+        # Theme info
+        info_layout = QVBoxLayout()
+        
+        # Theme name
+        name_label = QLabel(theme.name)
+        name_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        info_layout.addWidget(name_label)
+        
+        # Theme description
+        desc_label = QLabel(theme.description or "No description")
+        info_layout.addWidget(desc_label)
+        
+        layout.addLayout(info_layout, 1)
+        
+        # Theme actions
+        actions_layout = QVBoxLayout()
+        
+        # Apply button
+        apply_button = QPushButton("Apply")
+        apply_button.clicked.connect(lambda: self._on_apply_theme(theme))
+        actions_layout.addWidget(apply_button)
+        
+        # Edit/Delete buttons
+        edit_delete_layout = QHBoxLayout()
+        
+        edit_button = QPushButton("Edit")
+        edit_button.clicked.connect(lambda: self._on_edit_theme(theme))
+        edit_delete_layout.addWidget(edit_button)
+        
+        delete_button = QPushButton("Delete")
+        delete_button.clicked.connect(lambda: self._on_delete_theme(theme))
+        edit_delete_layout.addWidget(delete_button)
+        
+        actions_layout.addLayout(edit_delete_layout)
+        
+        layout.addLayout(actions_layout)
+        
+        return widget
+    
+    def _on_theme_selection_changed(self, index: int):
+        """Handle theme selection change.
+        
+        Args:
+            index: Selected index
+        """
+        if index < 0:
+            return
+        
+        # Get theme data
+        theme_type, theme_name = self.theme_combo.itemData(index)
+        
+        # Emit signal
+        self.theme_changed.emit(theme_type, theme_name)
+    
+    def _on_create_theme(self):
+        """Handle create theme button click."""
+        dialog = ThemeEditorDialog(parent=self)
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # Get the theme
+            theme = dialog.get_theme()
+            
+            # Add to theme manager
+            if self.theme_manager.add_custom_theme(theme):
+                # Reload themes
+                self._load_themes()
+                
+                # Show success message
+                QMessageBox.information(
+                    self,
+                    "Theme Created",
+                    f"Theme '{theme.name}' has been created successfully."
+                )
+            else:
+                # Show error message
+                QMessageBox.warning(
+                    self,
+                    "Error",
+                    f"Failed to create theme '{theme.name}'."
+                )
+    
+    def _on_edit_theme(self, theme: Theme):
+        """Handle edit theme button click.
+        
+        Args:
+            theme: Theme to edit
+        """
+        # Create a copy of the theme for editing
+        theme_copy = Theme(
+            name=theme.name,
+            type=theme.type,
+            colors=theme.colors.copy(),
+            description=theme.description
+        )
+        
+        dialog = ThemeEditorDialog(theme_copy, parent=self)
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            # Get the edited theme
+            edited_theme = dialog.get_theme()
+            
+            # Add/update theme in manager
+            if self.theme_manager.add_custom_theme(edited_theme):
+                # Reload themes
+                self._load_themes()
+                
+                # Show success message
+                QMessageBox.information(
+                    self,
+                    "Theme Updated",
+                    f"Theme '{edited_theme.name}' has been updated successfully."
+                )
+            else:
+                # Show error message
+                QMessageBox.warning(
+                    self,
+                    "Error",
+                    f"Failed to update theme '{edited_theme.name}'."
+                )
+    
+    def _on_delete_theme(self, theme: Theme):
+        """Handle delete theme button click.
+        
+        Args:
+            theme: Theme to delete
+        """
+        # Confirm deletion
+        confirm = QMessageBox.question(
+            self,
+            "Delete Theme",
+            f"Are you sure you want to delete the theme '{theme.name}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if confirm == QMessageBox.StandardButton.Yes:
+            # Delete theme
+            if self.theme_manager.delete_custom_theme(theme.name):
+                # Reload themes
+                self._load_themes()
+                
+                # Show success message
+                QMessageBox.information(
+                    self,
+                    "Theme Deleted",
+                    f"Theme '{theme.name}' has been deleted successfully."
+                )
+            else:
+                # Show error message
+                QMessageBox.warning(
+                    self,
+                    "Error",
+                    f"Failed to delete theme '{theme.name}'."
+                )
+    
+    def _on_apply_theme(self, theme: Theme):
+        """Handle apply theme button click.
+        
+        Args:
+            theme: Theme to apply
+        """
+        # Emit theme changed signal
+        self.theme_changed.emit(ThemeType.CUSTOM, theme.name)
+        
+        # Update the theme selector to match
+        for i in range(self.theme_combo.count()):
+            theme_type, theme_name = self.theme_combo.itemData(i)
+            if theme_type == ThemeType.CUSTOM and theme_name == theme.name:
+                self.theme_combo.setCurrentIndex(i)
+                break
+    
+    def _on_import_theme(self):
+        """Handle import theme button click."""
+        # TODO: Implement theme import functionality
+        QMessageBox.information(
+            self,
+            "Not Implemented",
+            "Theme import functionality is not yet implemented."
+        )
 
 
 class ThemeCustomizer(QDialog):
