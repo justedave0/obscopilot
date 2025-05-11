@@ -139,6 +139,7 @@ This document outlines the tasks for developing OBSCopilot, a cross-platform Pyt
 - [x] Document API for extensibility
 - [x] Add inline code documentation
 - [x] Create tutorial videos/guides
+- [x] Create end-to-end tests
 
 ## 10. Deployment
 
@@ -205,7 +206,7 @@ Based on analysis of the current codebase, the following tasks would help comple
 - [x] Create developer guide for extending OBSCopilot (done)
 - [ ] Add tutorial documentation with examples
 - [ ] Create video tutorials for common workflows
-- [ ] Add inline code comments for complex logic
+- [x] Create end-to-end tests
 
 ## Developer Experience
 
