@@ -7,14 +7,16 @@ import sys
 from typing import Dict, List, Optional
 
 from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QIcon, QAction, QFont
+from PyQt6.QtGui import QIcon, QAction, QFont, QPalette, QColor
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, 
     QHBoxLayout, QLabel, QPushButton, QStatusBar, QToolBar,
-    QMessageBox, QFileDialog, QMenu
+    QMessageBox, QFileDialog, QMenu, QScrollArea, QFrame, QDialog, QListWidget,
+    QDialogButtonBox, QFormLayout, QLineEdit, QSpinBox, QComboBox
 )
 
 from obscopilot.core.config import Config
+from obscopilot.core.events import Event, EventType, event_bus
 from obscopilot.storage.database import Database
 from obscopilot.storage.repositories import (
     WorkflowRepository, SettingRepository, TwitchAuthRepository
@@ -25,6 +27,80 @@ from obscopilot.workflows.engine import WorkflowEngine
 from obscopilot.ai.openai import OpenAIClient
 
 logger = logging.getLogger(__name__)
+
+
+class WorkflowItem(QWidget):
+    """Widget representing a single workflow in the workflow list."""
+    
+    def __init__(self, workflow, parent=None):
+        """Initialize the workflow item widget.
+        
+        Args:
+            workflow: The workflow model to display
+            parent: Parent widget
+        """
+        super().__init__(parent)
+        self.workflow = workflow
+        
+        # Create layout
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Workflow name
+        self.name_label = QLabel(workflow.name)
+        self.name_label.setFixedWidth(200)
+        self.name_label.setToolTip(workflow.name)
+        
+        # Workflow trigger type
+        trigger_type = "Multiple" if len(workflow.triggers) > 1 else (
+            workflow.triggers[0].type if workflow.triggers else "None")
+        self.type_label = QLabel(trigger_type)
+        self.type_label.setFixedWidth(120)
+        
+        # Workflow description
+        self.description_label = QLabel(workflow.description or "No description")
+        self.description_label.setToolTip(workflow.description or "No description")
+        
+        # Workflow status
+        self.status_label = QLabel("Enabled" if workflow.enabled else "Disabled")
+        self.status_label.setFixedWidth(80)
+        self.status_label.setStyleSheet(
+            "color: #4CAF50;" if workflow.enabled else "color: #F44336;")
+        
+        # Action buttons
+        actions_widget = QWidget()
+        actions_layout = QHBoxLayout(actions_widget)
+        actions_layout.setContentsMargins(0, 0, 0, 0)
+        actions_layout.setSpacing(5)
+        
+        # Edit button
+        self.edit_button = QPushButton("Edit")
+        self.edit_button.setFixedWidth(60)
+        
+        # Toggle button
+        self.toggle_button = QPushButton("Disable" if workflow.enabled else "Enable")
+        self.toggle_button.setFixedWidth(60)
+        
+        actions_layout.addWidget(self.edit_button)
+        actions_layout.addWidget(self.toggle_button)
+        actions_widget.setFixedWidth(150)
+        
+        # Add widgets to layout
+        layout.addWidget(self.name_label)
+        layout.addWidget(self.type_label)
+        layout.addWidget(self.description_label)
+        layout.addWidget(self.status_label)
+        layout.addWidget(actions_widget)
+        
+        # Set widget background
+        self.setAutoFillBackground(True)
+        
+        # Set alternating row colors
+        palette = self.palette()
+        palette.setColor(QPalette.ColorRole.Window, 
+                       QColor("#2A2A2A") if parent and parent.indexOf(self) % 2 == 0 
+                       else QColor("#323232"))
+        self.setPalette(palette)
 
 
 class MainWindow(QMainWindow):
@@ -143,44 +219,236 @@ class MainWindow(QMainWindow):
     
     def _init_dashboard(self):
         """Initialize dashboard tab components."""
-        # Add dashboard widgets here
-        status_label = QLabel("Dashboard - Status Overview")
-        status_label.setFont(QFont("Arial", 16))
-        self.dashboard_layout.addWidget(status_label)
+        # Main container
+        dashboard_container = QWidget()
+        dashboard_container_layout = QVBoxLayout(dashboard_container)
+        dashboard_container_layout.setContentsMargins(0, 0, 0, 0)
+        dashboard_container_layout.setSpacing(20)
         
-        # Add placeholders for status widgets
+        # Header section
+        header_container = QWidget()
+        header_layout = QVBoxLayout(header_container)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        
+        dashboard_title = QLabel("Dashboard")
+        dashboard_title.setFont(QFont("Arial", 18, QFont.Weight.Bold))
+        header_layout.addWidget(dashboard_title)
+        
+        dashboard_subtitle = QLabel("Overview of your streaming setup")
+        dashboard_subtitle.setFont(QFont("Arial", 12))
+        dashboard_subtitle.setStyleSheet("color: #888888;")
+        header_layout.addWidget(dashboard_subtitle)
+        
+        dashboard_container_layout.addWidget(header_container)
+        
+        # Status cards row
         status_container = QWidget()
         status_layout = QHBoxLayout(status_container)
+        status_layout.setContentsMargins(0, 0, 0, 0)
+        status_layout.setSpacing(15)
         
-        # Twitch status
-        twitch_status = QWidget()
-        twitch_layout = QVBoxLayout(twitch_status)
-        twitch_layout.addWidget(QLabel("Twitch"))
+        # Twitch status card
+        twitch_card = QFrame()
+        twitch_card.setFrameShape(QFrame.Shape.StyledPanel)
+        twitch_card.setStyleSheet(
+            "QFrame { background-color: #2D2D30; border-radius: 8px; padding: 10px; }"
+        )
+        twitch_card_layout = QVBoxLayout(twitch_card)
+        
+        twitch_header_layout = QHBoxLayout()
+        twitch_icon_label = QLabel("🔴")  # Placeholder for an icon
+        twitch_icon_label.setFont(QFont("Arial", 16))
+        twitch_header_layout.addWidget(twitch_icon_label)
+        
+        twitch_title = QLabel("Twitch")
+        twitch_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        twitch_header_layout.addWidget(twitch_title)
+        twitch_header_layout.addStretch()
+        
+        twitch_card_layout.addLayout(twitch_header_layout)
+        
+        twitch_card_layout.addSpacing(10)
+        
         self.twitch_status_label = QLabel("Disconnected")
-        twitch_layout.addWidget(self.twitch_status_label)
-        status_layout.addWidget(twitch_status)
+        self.twitch_status_label.setFont(QFont("Arial", 12))
+        self.twitch_status_label.setStyleSheet("color: #FF5252;")  # Red for disconnected
+        twitch_card_layout.addWidget(self.twitch_status_label)
         
-        # OBS status
-        obs_status = QWidget()
-        obs_layout = QVBoxLayout(obs_status)
-        obs_layout.addWidget(QLabel("OBS"))
+        twitch_card_layout.addSpacing(5)
+        
+        twitch_connect_button = QPushButton("Connect")
+        twitch_connect_button.clicked.connect(self._toggle_twitch_connection)
+        twitch_card_layout.addWidget(twitch_connect_button)
+        
+        status_layout.addWidget(twitch_card)
+        
+        # OBS status card
+        obs_card = QFrame()
+        obs_card.setFrameShape(QFrame.Shape.StyledPanel)
+        obs_card.setStyleSheet(
+            "QFrame { background-color: #2D2D30; border-radius: 8px; padding: 10px; }"
+        )
+        obs_card_layout = QVBoxLayout(obs_card)
+        
+        obs_header_layout = QHBoxLayout()
+        obs_icon_label = QLabel("📹")  # Placeholder for an icon
+        obs_icon_label.setFont(QFont("Arial", 16))
+        obs_header_layout.addWidget(obs_icon_label)
+        
+        obs_title = QLabel("OBS")
+        obs_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        obs_header_layout.addWidget(obs_title)
+        obs_header_layout.addStretch()
+        
+        obs_card_layout.addLayout(obs_header_layout)
+        
+        obs_card_layout.addSpacing(10)
+        
         self.obs_status_label = QLabel("Disconnected")
-        obs_layout.addWidget(self.obs_status_label)
-        status_layout.addWidget(obs_status)
+        self.obs_status_label.setFont(QFont("Arial", 12))
+        self.obs_status_label.setStyleSheet("color: #FF5252;")  # Red for disconnected
+        obs_card_layout.addWidget(self.obs_status_label)
         
-        # Workflows status
-        workflows_status = QWidget()
-        workflows_layout = QVBoxLayout(workflows_status)
-        workflows_layout.addWidget(QLabel("Workflows"))
+        obs_card_layout.addSpacing(5)
+        
+        obs_connect_button = QPushButton("Connect")
+        obs_connect_button.clicked.connect(self._toggle_obs_connection)
+        obs_card_layout.addWidget(obs_connect_button)
+        
+        status_layout.addWidget(obs_card)
+        
+        # Workflows status card
+        workflows_card = QFrame()
+        workflows_card.setFrameShape(QFrame.Shape.StyledPanel)
+        workflows_card.setStyleSheet(
+            "QFrame { background-color: #2D2D30; border-radius: 8px; padding: 10px; }"
+        )
+        workflows_card_layout = QVBoxLayout(workflows_card)
+        
+        workflows_header_layout = QHBoxLayout()
+        workflows_icon_label = QLabel("⚙️")  # Placeholder for an icon
+        workflows_icon_label.setFont(QFont("Arial", 16))
+        workflows_header_layout.addWidget(workflows_icon_label)
+        
+        workflows_title = QLabel("Workflows")
+        workflows_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        workflows_header_layout.addWidget(workflows_title)
+        workflows_header_layout.addStretch()
+        
+        workflows_card_layout.addLayout(workflows_header_layout)
+        
+        workflows_card_layout.addSpacing(10)
+        
         self.workflows_status_label = QLabel("0 loaded")
-        workflows_layout.addWidget(self.workflows_status_label)
-        status_layout.addWidget(workflows_status)
+        self.workflows_status_label.setFont(QFont("Arial", 12))
+        workflows_card_layout.addWidget(self.workflows_status_label)
         
-        # Add status container to dashboard
-        self.dashboard_layout.addWidget(status_container)
+        workflows_card_layout.addSpacing(5)
         
-        # Add spacer
-        self.dashboard_layout.addStretch()
+        workflows_manage_button = QPushButton("Manage Workflows")
+        workflows_manage_button.clicked.connect(
+            lambda: self.tab_widget.setCurrentIndex(self.tab_widget.indexOf(self.workflows_widget))
+        )
+        workflows_card_layout.addWidget(workflows_manage_button)
+        
+        status_layout.addWidget(workflows_card)
+        
+        # AI status card
+        ai_card = QFrame()
+        ai_card.setFrameShape(QFrame.Shape.StyledPanel)
+        ai_card.setStyleSheet(
+            "QFrame { background-color: #2D2D30; border-radius: 8px; padding: 10px; }"
+        )
+        ai_card_layout = QVBoxLayout(ai_card)
+        
+        ai_header_layout = QHBoxLayout()
+        ai_icon_label = QLabel("🧠")  # Placeholder for an icon
+        ai_icon_label.setFont(QFont("Arial", 16))
+        ai_header_layout.addWidget(ai_icon_label)
+        
+        ai_title = QLabel("AI")
+        ai_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        ai_header_layout.addWidget(ai_title)
+        ai_header_layout.addStretch()
+        
+        ai_card_layout.addLayout(ai_header_layout)
+        
+        ai_card_layout.addSpacing(10)
+        
+        self.ai_status_label = QLabel("Ready")
+        self.ai_status_label.setFont(QFont("Arial", 12))
+        self.ai_status_label.setStyleSheet("color: #4CAF50;")  # Green for ready
+        ai_card_layout.addWidget(self.ai_status_label)
+        
+        ai_card_layout.addSpacing(5)
+        
+        ai_settings_button = QPushButton("AI Settings")
+        ai_settings_button.clicked.connect(
+            lambda: self.tab_widget.setCurrentIndex(self.tab_widget.indexOf(self.settings_widget))
+        )
+        ai_card_layout.addWidget(ai_settings_button)
+        
+        status_layout.addWidget(ai_card)
+        
+        dashboard_container_layout.addWidget(status_container)
+        
+        # Quick actions section
+        actions_container = QWidget()
+        actions_layout = QVBoxLayout(actions_container)
+        actions_layout.setContentsMargins(0, 0, 0, 0)
+        
+        actions_header = QLabel("Quick Actions")
+        actions_header.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        actions_layout.addWidget(actions_header)
+        
+        actions_buttons_layout = QHBoxLayout()
+        actions_buttons_layout.setSpacing(10)
+        
+        toggle_stream_button = QPushButton("Toggle Stream")
+        toggle_stream_button.setMinimumHeight(40)
+        toggle_stream_button.clicked.connect(self._toggle_streaming)
+        actions_buttons_layout.addWidget(toggle_stream_button)
+        
+        toggle_recording_button = QPushButton("Toggle Recording")
+        toggle_recording_button.setMinimumHeight(40)
+        toggle_recording_button.clicked.connect(self._toggle_recording)
+        actions_buttons_layout.addWidget(toggle_recording_button)
+        
+        scene_switch_button = QPushButton("Switch Scene")
+        scene_switch_button.setMinimumHeight(40)
+        scene_switch_button.clicked.connect(self._show_scene_selector)
+        actions_buttons_layout.addWidget(scene_switch_button)
+        
+        test_alert_button = QPushButton("Test Alert")
+        test_alert_button.setMinimumHeight(40)
+        test_alert_button.clicked.connect(self._test_alert)
+        actions_buttons_layout.addWidget(test_alert_button)
+        
+        actions_layout.addLayout(actions_buttons_layout)
+        
+        dashboard_container_layout.addWidget(actions_container)
+        
+        # Stats section (placeholder for future metrics)
+        stats_container = QWidget()
+        stats_layout = QVBoxLayout(stats_container)
+        stats_layout.setContentsMargins(0, 0, 0, 0)
+        
+        stats_header = QLabel("Stream Statistics")
+        stats_header.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        stats_layout.addWidget(stats_header)
+        
+        stats_placeholder = QLabel("Stream statistics will be displayed here")
+        stats_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        stats_placeholder.setStyleSheet("color: #888888; padding: 20px;")
+        stats_layout.addWidget(stats_placeholder)
+        
+        dashboard_container_layout.addWidget(stats_container)
+        
+        # Add spacer to push everything to the top
+        dashboard_container_layout.addStretch()
+        
+        # Add the main container to the dashboard layout
+        self.dashboard_layout.addWidget(dashboard_container)
     
     def _init_connections(self):
         """Initialize connections tab components."""
@@ -251,9 +519,63 @@ class MainWindow(QMainWindow):
         
         self.workflows_layout.addWidget(workflow_button_container)
         
-        # Workflow list placeholder
-        workflow_list_label = QLabel("No workflows loaded")
-        self.workflows_layout.addWidget(workflow_list_label)
+        # Create workflow list widget
+        workflows_container = QWidget()
+        workflows_container_layout = QVBoxLayout(workflows_container)
+        workflows_container_layout.setContentsMargins(0, 10, 0, 0)
+        
+        # Create header
+        header_container = QWidget()
+        header_layout = QHBoxLayout(header_container)
+        header_layout.setContentsMargins(5, 5, 5, 5)
+        
+        name_header = QLabel("Name")
+        name_header.setFixedWidth(200)
+        name_header.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        
+        type_header = QLabel("Trigger Type")
+        type_header.setFixedWidth(120)
+        type_header.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        
+        description_header = QLabel("Description")
+        description_header.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        
+        status_header = QLabel("Status")
+        status_header.setFixedWidth(80)
+        status_header.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        
+        actions_header = QLabel("Actions")
+        actions_header.setFixedWidth(150)
+        actions_header.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        
+        header_layout.addWidget(name_header)
+        header_layout.addWidget(type_header)
+        header_layout.addWidget(description_header)
+        header_layout.addWidget(status_header)
+        header_layout.addWidget(actions_header)
+        
+        workflows_container_layout.addWidget(header_container)
+        
+        # Scrollable area for workflow items
+        self.workflow_scroll_area = QScrollArea()
+        self.workflow_scroll_area.setWidgetResizable(True)
+        self.workflow_scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        
+        self.workflow_scroll_content = QWidget()
+        self.workflow_scroll_layout = QVBoxLayout(self.workflow_scroll_content)
+        self.workflow_scroll_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.workflow_scroll_layout.setContentsMargins(0, 0, 0, 0)
+        self.workflow_scroll_layout.setSpacing(2)
+        
+        # Add empty state message
+        self.workflow_empty_label = QLabel("No workflows loaded")
+        self.workflow_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.workflow_scroll_layout.addWidget(self.workflow_empty_label)
+        
+        self.workflow_scroll_area.setWidget(self.workflow_scroll_content)
+        workflows_container_layout.addWidget(self.workflow_scroll_area)
+        
+        self.workflows_layout.addWidget(workflows_container)
         
         # Add spacer
         self.workflows_layout.addStretch()
@@ -531,6 +853,55 @@ class MainWindow(QMainWindow):
         # Update UI
         self._update_connection_status()
     
+    def _edit_workflow(self, workflow_id):
+        """Open workflow editor for the specified workflow.
+        
+        Args:
+            workflow_id: ID of the workflow to edit
+        """
+        if not self.workflow_engine:
+            self.status_bar.showMessage("Workflow engine not initialized")
+            return
+        
+        workflow = self.workflow_engine.workflows.get(workflow_id)
+        if not workflow:
+            self.status_bar.showMessage(f"Workflow not found: {workflow_id}")
+            return
+        
+        # TODO: Implement workflow editor
+        QMessageBox.information(
+            self, 
+            "Edit Workflow", 
+            f"Workflow editor not implemented yet. Would edit: {workflow.name}"
+        )
+    
+    def _toggle_workflow(self, workflow_id):
+        """Toggle the enabled state of a workflow.
+        
+        Args:
+            workflow_id: ID of the workflow to toggle
+        """
+        if not self.workflow_engine:
+            self.status_bar.showMessage("Workflow engine not initialized")
+            return
+        
+        workflow = self.workflow_engine.workflows.get(workflow_id)
+        if not workflow:
+            self.status_bar.showMessage(f"Workflow not found: {workflow_id}")
+            return
+        
+        # Toggle enabled state
+        workflow.enabled = not workflow.enabled
+        
+        # Update in database
+        self.workflow_repo.update(workflow)
+        
+        # Update UI
+        self.status_bar.showMessage(
+            f"Workflow {'enabled' if workflow.enabled else 'disabled'}: {workflow.name}"
+        )
+        self.refresh_workflows()
+    
     def _load_workflow(self):
         """Load a workflow from file."""
         if not self.workflow_engine:
@@ -556,7 +927,9 @@ class MainWindow(QMainWindow):
                 self.workflow_engine.register_workflow(workflow)
                 
                 self.status_bar.showMessage(f"Loaded workflow: {workflow.name}")
-                self._update_connection_status()
+                
+                # Refresh the workflow list
+                self.refresh_workflows()
             except Exception as e:
                 logger.error(f"Error loading workflow: {e}")
                 self.status_bar.showMessage("Error loading workflow")
@@ -598,4 +971,240 @@ class MainWindow(QMainWindow):
         if self.database:
             self.database.close()
             
-        event.accept() 
+        event.accept()
+
+    def refresh_workflows(self):
+        """Refresh the workflow list."""
+        # Clear current items
+        while self.workflow_scroll_layout.count() > 0:
+            item = self.workflow_scroll_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        if not self.workflow_engine or not self.workflow_engine.workflows:
+            # Show empty state
+            self.workflow_empty_label = QLabel("No workflows loaded")
+            self.workflow_empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.workflow_scroll_layout.addWidget(self.workflow_empty_label)
+            return
+        
+        # Hide empty label
+        if hasattr(self, 'workflow_empty_label') and self.workflow_empty_label:
+            self.workflow_empty_label.hide()
+            self.workflow_empty_label = None
+        
+        # Add workflow items
+        for workflow_id, workflow in self.workflow_engine.workflows.items():
+            workflow_item = WorkflowItem(workflow, self.workflow_scroll_content)
+            
+            # Connect signals
+            workflow_item.edit_button.clicked.connect(
+                lambda checked, wid=workflow_id: self._edit_workflow(wid))
+            workflow_item.toggle_button.clicked.connect(
+                lambda checked, wid=workflow_id: self._toggle_workflow(wid))
+            
+            self.workflow_scroll_layout.addWidget(workflow_item)
+        
+        # Update status
+        self._update_connection_status()
+    
+    def _toggle_streaming(self):
+        """Toggle OBS streaming state."""
+        if not self.obs_client:
+            self.status_bar.showMessage("OBS client not initialized")
+            return
+            
+        if not self.obs_client.connected:
+            self.status_bar.showMessage("OBS not connected")
+            QMessageBox.warning(self, "OBS Not Connected", "Please connect to OBS first.")
+            return
+            
+        try:
+            if self.obs_client.is_streaming():
+                # Stop streaming
+                success = self.obs_client.stop_streaming()
+                if success:
+                    self.status_bar.showMessage("Streaming stopped")
+                else:
+                    self.status_bar.showMessage("Failed to stop streaming")
+            else:
+                # Start streaming
+                success = self.obs_client.start_streaming()
+                if success:
+                    self.status_bar.showMessage("Streaming started")
+                else:
+                    self.status_bar.showMessage("Failed to start streaming")
+        except Exception as e:
+            logger.error(f"Error toggling streaming: {e}")
+            self.status_bar.showMessage("Error toggling streaming")
+            QMessageBox.warning(self, "Error", f"Failed to toggle streaming: {str(e)}")
+    
+    def _toggle_recording(self):
+        """Toggle OBS recording state."""
+        if not self.obs_client:
+            self.status_bar.showMessage("OBS client not initialized")
+            return
+            
+        if not self.obs_client.connected:
+            self.status_bar.showMessage("OBS not connected")
+            QMessageBox.warning(self, "OBS Not Connected", "Please connect to OBS first.")
+            return
+            
+        try:
+            if self.obs_client.is_recording():
+                # Stop recording
+                success = self.obs_client.stop_recording()
+                if success:
+                    self.status_bar.showMessage("Recording stopped")
+                else:
+                    self.status_bar.showMessage("Failed to stop recording")
+            else:
+                # Start recording
+                success = self.obs_client.start_recording()
+                if success:
+                    self.status_bar.showMessage("Recording started")
+                else:
+                    self.status_bar.showMessage("Failed to start recording")
+        except Exception as e:
+            logger.error(f"Error toggling recording: {e}")
+            self.status_bar.showMessage("Error toggling recording")
+            QMessageBox.warning(self, "Error", f"Failed to toggle recording: {str(e)}")
+    
+    def _show_scene_selector(self):
+        """Show scene selector dialog."""
+        if not self.obs_client:
+            self.status_bar.showMessage("OBS client not initialized")
+            return
+            
+        if not self.obs_client.connected:
+            self.status_bar.showMessage("OBS not connected")
+            QMessageBox.warning(self, "OBS Not Connected", "Please connect to OBS first.")
+            return
+            
+        try:
+            # Get list of scenes
+            scenes = self.obs_client.get_scenes()
+            if not scenes:
+                self.status_bar.showMessage("No scenes found")
+                QMessageBox.warning(self, "No Scenes", "No scenes found in OBS.")
+                return
+                
+            # Create scene selection dialog
+            scene_dialog = QDialog(self)
+            scene_dialog.setWindowTitle("Select Scene")
+            scene_dialog.setMinimumWidth(300)
+            
+            layout = QVBoxLayout(scene_dialog)
+            
+            label = QLabel("Select a scene to switch to:")
+            layout.addWidget(label)
+            
+            scene_list = QListWidget()
+            for scene in scenes:
+                scene_list.addItem(scene)
+            layout.addWidget(scene_list)
+            
+            buttons = QDialogButtonBox(
+                QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+            )
+            buttons.accepted.connect(scene_dialog.accept)
+            buttons.rejected.connect(scene_dialog.reject)
+            layout.addWidget(buttons)
+            
+            if scene_dialog.exec() == QDialog.DialogCode.Accepted:
+                selected_items = scene_list.selectedItems()
+                if selected_items:
+                    selected_scene = selected_items[0].text()
+                    success = self.obs_client.set_current_scene(selected_scene)
+                    if success:
+                        self.status_bar.showMessage(f"Switched to scene: {selected_scene}")
+                    else:
+                        self.status_bar.showMessage(f"Failed to switch to scene: {selected_scene}")
+        except Exception as e:
+            logger.error(f"Error showing scene selector: {e}")
+            self.status_bar.showMessage("Error showing scene selector")
+            QMessageBox.warning(self, "Error", f"Failed to show scene selector: {str(e)}")
+    
+    def _test_alert(self):
+        """Test alert functionality."""
+        if not self.workflow_engine:
+            self.status_bar.showMessage("Workflow engine not initialized")
+            return
+            
+        # Create test alert dialog
+        alert_dialog = QDialog(self)
+        alert_dialog.setWindowTitle("Test Alert")
+        alert_dialog.setMinimumWidth(400)
+        
+        layout = QVBoxLayout(alert_dialog)
+        
+        label = QLabel("Select alert type to test:")
+        layout.addWidget(label)
+        
+        alert_type_combo = QComboBox()
+        alert_type_combo.addItems([
+            "Subscription", "Follow", "Bits", "Raid", "Channel Points"
+        ])
+        layout.addWidget(alert_type_combo)
+        
+        message_layout = QFormLayout()
+        message_input = QLineEdit()
+        message_input.setText("Test alert message")
+        message_layout.addRow("Message:", message_input)
+        layout.addLayout(message_layout)
+        
+        username_layout = QFormLayout()
+        username_input = QLineEdit()
+        username_input.setText("TestUser")
+        username_layout.addRow("Username:", username_input)
+        layout.addLayout(username_layout)
+        
+        amount_layout = QFormLayout()
+        amount_input = QSpinBox()
+        amount_input.setValue(1)
+        amount_input.setMinimum(1)
+        amount_input.setMaximum(10000)
+        amount_layout.addRow("Amount:", amount_input)
+        layout.addLayout(amount_layout)
+        
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(alert_dialog.accept)
+        buttons.rejected.connect(alert_dialog.reject)
+        layout.addWidget(buttons)
+        
+        if alert_dialog.exec() == QDialog.DialogCode.Accepted:
+            alert_type = alert_type_combo.currentText()
+            username = username_input.text()
+            message = message_input.text()
+            amount = amount_input.value()
+            
+            # Create test event data based on alert type
+            event_data = {
+                "username": username,
+                "message": message,
+                "amount": amount,
+                "test": True
+            }
+            
+            # Determine event type based on selected alert type
+            event_type = None
+            if alert_type == "Subscription":
+                event_type = EventType.TWITCH_SUBSCRIPTION
+            elif alert_type == "Follow":
+                event_type = EventType.TWITCH_FOLLOW
+            elif alert_type == "Bits":
+                event_type = EventType.TWITCH_BITS
+            elif alert_type == "Raid":
+                event_type = EventType.TWITCH_RAID
+            elif alert_type == "Channel Points":
+                event_type = EventType.TWITCH_CHANNEL_POINTS_REDEEM
+            
+            if event_type:
+                # Create and emit test event
+                test_event = Event(event_type, event_data)
+                event_bus.emit_sync(test_event)
+                self.status_bar.showMessage(f"Test {alert_type} alert triggered")
+            else:
+                self.status_bar.showMessage("Invalid alert type") 

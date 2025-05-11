@@ -4,7 +4,7 @@ Simple UI module for OBSCopilot.
 This module provides a simplified UI that doesn't require complex dependencies.
 """
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
 )
 
 from obscopilot.core.config import Config
+from obscopilot.core.events import event_bus, Event, EventType
 
 class SimpleMainWindow(QMainWindow):
     """Simple main window for OBSCopilot."""
@@ -70,24 +71,24 @@ class SimpleMainWindow(QMainWindow):
         twitch_status = QWidget()
         twitch_layout = QVBoxLayout(twitch_status)
         twitch_layout.addWidget(QLabel("Twitch"))
-        twitch_status_label = QLabel("Not Connected")
-        twitch_layout.addWidget(twitch_status_label)
+        self.twitch_status_label = QLabel("Not Connected")
+        twitch_layout.addWidget(self.twitch_status_label)
         status_layout.addWidget(twitch_status)
         
         # OBS status
         obs_status = QWidget()
         obs_layout = QVBoxLayout(obs_status)
         obs_layout.addWidget(QLabel("OBS"))
-        obs_status_label = QLabel("Not Connected")
-        obs_layout.addWidget(obs_status_label)
+        self.obs_status_label = QLabel("Not Connected")
+        obs_layout.addWidget(self.obs_status_label)
         status_layout.addWidget(obs_status)
         
         # Workflows status
         workflows_status = QWidget()
         workflows_layout = QVBoxLayout(workflows_status)
         workflows_layout.addWidget(QLabel("Workflows"))
-        workflows_status_label = QLabel("0 loaded")
-        workflows_layout.addWidget(workflows_status_label)
+        self.workflows_status_label = QLabel("0 loaded")
+        workflows_layout.addWidget(self.workflows_status_label)
         status_layout.addWidget(workflows_status)
         
         # Add status container to dashboard
@@ -142,6 +143,9 @@ class SimpleMainWindow(QMainWindow):
         
         # Apply dark theme
         self._apply_dark_theme()
+        
+        # Register event handlers
+        self._register_event_handlers()
     
     def _init_settings_ui(self):
         """Initialize settings UI components."""
@@ -527,4 +531,42 @@ class SimpleMainWindow(QMainWindow):
         }
         """
         
-        self.setStyleSheet(light_stylesheet) 
+        self.setStyleSheet(light_stylesheet)
+    
+    def _register_event_handlers(self):
+        """Register event handlers for updating UI."""
+        # Twitch events
+        event_bus.subscribe(EventType.TWITCH_CONNECTED, self._handle_event)
+        event_bus.subscribe(EventType.TWITCH_DISCONNECTED, self._handle_event)
+        
+        # OBS events
+        event_bus.subscribe(EventType.OBS_CONNECTED, self._handle_event)
+        event_bus.subscribe(EventType.OBS_DISCONNECTED, self._handle_event)
+        
+        # Workflow events
+        event_bus.subscribe(EventType.WORKFLOW_LOADED, self._handle_event)
+    
+    @pyqtSlot(Event)
+    def _handle_event(self, event):
+        """Handle events from the event bus."""
+        # Update UI based on event type
+        if event.event_type == EventType.TWITCH_CONNECTED:
+            self.twitch_status_label.setText("Connected")
+            self.status_bar.showMessage("Twitch connected")
+        
+        elif event.event_type == EventType.TWITCH_DISCONNECTED:
+            self.twitch_status_label.setText("Not Connected")
+            self.status_bar.showMessage("Twitch disconnected")
+        
+        elif event.event_type == EventType.OBS_CONNECTED:
+            self.obs_status_label.setText("Connected")
+            self.status_bar.showMessage("OBS connected")
+        
+        elif event.event_type == EventType.OBS_DISCONNECTED:
+            self.obs_status_label.setText("Not Connected")
+            self.status_bar.showMessage("OBS disconnected")
+        
+        elif event.event_type == EventType.WORKFLOW_LOADED:
+            workflow_count = event.data.get('count', 0)
+            self.workflows_status_label.setText(f"{workflow_count} loaded")
+            self.status_bar.showMessage(f"Loaded {workflow_count} workflows") 

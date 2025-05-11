@@ -3,8 +3,8 @@
 ## Phase 1: Core Infrastructure
 - [x] Project setup and dependencies
 - [x] Configuration management
-- [ ] Event bus implementation
-- [ ] Basic GUI layout
+- [x] Event bus implementation
+- [x] Basic GUI layout
 
 ## Phase 2: Integrations
 - [ ] Twitch authentication and event handling

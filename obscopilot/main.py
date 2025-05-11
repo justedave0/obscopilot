@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import QApplication
 
 from obscopilot import __version__
 from obscopilot.core.config import Config
+from obscopilot.core.events import event_bus
 from obscopilot.storage.database import Database
 from obscopilot.storage.repositories import (
     WorkflowRepository, TriggerRepository, ActionRepository,
@@ -61,6 +62,13 @@ def parse_args():
     return parser.parse_args()
 
 
+async def cleanup():
+    """Clean up resources before exit."""
+    logger.info("Shutting down event bus")
+    await event_bus.stop()
+    logger.info("Cleanup completed")
+
+
 def main():
     """Main application entry point."""
     # Parse command line arguments
@@ -90,6 +98,10 @@ def main():
     execution_repo = WorkflowExecutionRepository(database)
     setting_repo = SettingRepository(database)
     twitch_auth_repo = TwitchAuthRepository(database)
+    
+    # Start the event bus
+    logger.info("Starting event bus")
+    event_bus.start()
     
     # Initialize clients
     twitch_client = TwitchClient(config)
@@ -123,6 +135,9 @@ def main():
     
     # Load workflows
     asyncio.create_task(workflow_engine.load_workflows())
+    
+    # Set up cleanup on application exit
+    app.aboutToQuit.connect(lambda: asyncio.run(cleanup()))
     
     # Run application
     return app.exec()
