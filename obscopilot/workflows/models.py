@@ -68,6 +68,7 @@ class ActionType(str, Enum):
     # Media actions
     PLAY_SOUND = "play_sound"
     SHOW_IMAGE = "show_image"
+    SHOW_ALERT = "show_alert"
     
     # AI actions
     AI_GENERATE_RESPONSE = "ai_generate_response"

@@ -181,6 +181,7 @@ class WorkflowEngine:
             # Media actions
             ActionType.PLAY_SOUND: self._handle_play_sound,
             ActionType.SHOW_IMAGE: self._handle_show_image,
+            ActionType.SHOW_ALERT: self._handle_show_alert,
             
             # AI actions
             ActionType.AI_GENERATE_RESPONSE: self._handle_ai_generate_response,
@@ -854,14 +855,14 @@ class WorkflowEngine:
             return False
     
     async def _handle_show_image(self, action: WorkflowAction, context: WorkflowContext) -> bool:
-        """Handle a show image action.
+        """Handle SHOW_IMAGE action.
         
         Args:
-            action: Action configuration
+            action: Action to execute
             context: Workflow execution context
             
         Returns:
-            True if successful, False otherwise
+            True if image was shown successfully, False otherwise
         """
         try:
             from obscopilot.workflows.actions import get_action_class
@@ -872,15 +873,49 @@ class WorkflowEngine:
                 logger.error(f"Action class not found for type: {ActionType.SHOW_IMAGE}")
                 return False
             
-            # Get application config
-            config = self.config.get_all()
-            
             # Execute the action using the action class
-            result = await action_class.execute(action, context, config=config)
+            result = await action_class.execute(
+                action, 
+                context, 
+                config=self.config.get_all()
+            )
             
             return result
         except Exception as e:
             logger.error(f"Error in _handle_show_image: {e}")
+            return False
+    
+    async def _handle_show_alert(self, action: WorkflowAction, context: WorkflowContext) -> bool:
+        """Handle SHOW_ALERT action.
+        
+        Args:
+            action: Action to execute
+            context: Workflow execution context
+            
+        Returns:
+            True if alert was shown successfully, False otherwise
+        """
+        try:
+            from obscopilot.workflows.actions import get_action_class
+            
+            # Get ShowAlertAction class
+            action_class = get_action_class(ActionType.SHOW_ALERT)
+            if not action_class:
+                logger.error(f"Action class not found for type: {ActionType.SHOW_ALERT}")
+                return False
+            
+            # Execute the action using the action class
+            result = await action_class.execute(
+                action, 
+                context, 
+                config=self.config.get_all(),
+                database=self.database,
+                obs_client=self.obs_client
+            )
+            
+            return result
+        except Exception as e:
+            logger.error(f"Error in _handle_show_alert: {e}")
             return False
     
     async def _handle_webhook(self, action: WorkflowAction, context: WorkflowContext) -> bool:

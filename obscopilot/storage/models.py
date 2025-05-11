@@ -343,4 +343,64 @@ class StreamSessionModel(Base):
             'messages_count': self.messages_count,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class AlertModel(Base):
+    """Database model for storing alert templates."""
+    
+    __tablename__ = 'alerts'
+    
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String(255), nullable=False)
+    description = Column(String(1000), nullable=True)
+    
+    # Alert content
+    message = Column(String(1000), nullable=True)  # Text overlay message
+    image_path = Column(String(255), nullable=True)  # Image path
+    sound_path = Column(String(255), nullable=True)  # Sound path
+    
+    # Style options
+    duration = Column(Float, default=5.0, nullable=False)  # In seconds
+    font_size = Column(Integer, default=24, nullable=False)
+    font_color = Column(String(20), default="#FFFFFF", nullable=False)
+    background_color = Column(String(20), default="#000000AA", nullable=False)
+    text_position = Column(String(20), default="center", nullable=False)  # top, center, bottom
+    
+    # Animation options
+    animation_in = Column(String(50), default="fade", nullable=False)  # fade, slide, bounce
+    animation_out = Column(String(50), default="fade", nullable=False)
+    
+    # OBS source options
+    source_name = Column(String(255), nullable=True)  # OBS source to update
+    use_default_source = Column(Boolean, default=True, nullable=False)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert model to dictionary.
+        
+        Returns:
+            Dictionary representation of the model
+        """
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'message': self.message,
+            'image_path': self.image_path,
+            'sound_path': self.sound_path,
+            'duration': self.duration,
+            'font_size': self.font_size,
+            'font_color': self.font_color,
+            'background_color': self.background_color,
+            'text_position': self.text_position,
+            'animation_in': self.animation_in,
+            'animation_out': self.animation_out,
+            'source_name': self.source_name,
+            'use_default_source': self.use_default_source,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         } 

@@ -472,6 +472,7 @@ class OBSClient:
             'path': output_path
         }))
     
+    @_check_connection
     async def _handle_source_visibility_changed(self, data):
         """Handle source visibility changed event."""
         scene_name = data.get('sceneName', '')
@@ -483,4 +484,123 @@ class OBSClient:
             'source_name': source_name,
             'visible': visible,
             'scene_name': scene_name
-        })) 
+        }))
+        
+    @_check_connection
+    async def get_source_settings(self, source_name: str, source_type: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Get the settings of a source.
+        
+        Args:
+            source_name: Name of the source
+            source_type: Type of the source (optional)
+            
+        Returns:
+            Source settings if found, None otherwise
+        """
+        try:
+            request = simpleobsws.Request('GetInputSettings', {
+                'inputName': source_name
+            })
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                logger.debug(f"Source {source_name} not found or error: {response.error()}")
+                return None
+                
+            return response.responseData
+        except Exception as e:
+            logger.error(f"Error getting source settings: {e}")
+            return None
+    
+    @_check_connection
+    async def create_text_source(self, source_name: str, scene_name: Optional[str] = None, settings: Optional[Dict[str, Any]] = None) -> bool:
+        """Create a text source in OBS.
+        
+        Args:
+            source_name: Name of the source
+            scene_name: Name of the scene to add the source to (optional, uses current scene if None)
+            settings: Initial settings for the source (optional)
+            
+        Returns:
+            True if source was created successfully, False otherwise
+        """
+        try:
+            # Default settings
+            default_settings = {
+                "text": "",
+                "font": {
+                    "face": "Arial",
+                    "size": 24,
+                    "style": "Regular"
+                },
+                "color": 4294967295,  # White
+                "bgcolor": 0,  # Transparent
+                "align": "center"
+            }
+            
+            # Merge with provided settings
+            if settings:
+                default_settings.update(settings)
+            
+            # Create the source
+            logger.info(f"Creating text source: {source_name}")
+            create_request = simpleobsws.Request('CreateInput', {
+                'sceneName': scene_name or await self.get_current_scene(),
+                'inputName': source_name,
+                'inputKind': 'text_gdiplus_v2',
+                'inputSettings': default_settings,
+                'sceneItemEnabled': False
+            })
+            create_response = await self.client.call(create_request)
+            
+            if not create_response.ok():
+                logger.error(f"Error creating text source: {create_response.error()}")
+                return False
+                
+            return True
+        except Exception as e:
+            logger.error(f"Error creating text source: {e}")
+            return False
+    
+    @_check_connection
+    async def set_source_text(self, source_name: str, text: str, settings: Optional[Dict[str, Any]] = None) -> bool:
+        """Set the text of a text source.
+        
+        Args:
+            source_name: Name of the source
+            text: Text to set
+            settings: Additional settings to update (optional)
+            
+        Returns:
+            True if text was set successfully, False otherwise
+        """
+        try:
+            # Get current settings
+            current_settings = await self.get_source_settings(source_name)
+            if not current_settings:
+                logger.error(f"Source {source_name} not found")
+                return False
+            
+            # Update text
+            input_settings = current_settings.get('inputSettings', {})
+            input_settings['text'] = text
+            
+            # Update additional settings if provided
+            if settings:
+                input_settings.update(settings)
+            
+            # Apply settings
+            request = simpleobsws.Request('SetInputSettings', {
+                'inputName': source_name,
+                'inputSettings': input_settings
+            })
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                logger.error(f"Error setting source text: {response.error()}")
+                return False
+                
+            return True
+        except Exception as e:
+            logger.error(f"Error setting source text: {e}")
+            return False 

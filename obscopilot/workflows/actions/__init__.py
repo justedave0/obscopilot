@@ -22,7 +22,8 @@ from .obs_actions import (
 )
 from .media_actions import (
     PlaySoundAction,
-    ShowImageAction
+    ShowImageAction,
+    ShowAlertAction
 )
 from .ai_actions import AiGenerateResponseAction
 from .control_actions import (
@@ -51,6 +52,7 @@ ACTION_REGISTRY = {
     # Media actions
     ActionType.PLAY_SOUND: PlaySoundAction,
     ActionType.SHOW_IMAGE: ShowImageAction,
+    ActionType.SHOW_ALERT: ShowAlertAction,
     
     # AI actions
     ActionType.AI_GENERATE_RESPONSE: AiGenerateResponseAction,

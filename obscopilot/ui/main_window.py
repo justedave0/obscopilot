@@ -6,6 +6,7 @@ from obscopilot.ui.workflows_tab import WorkflowsTab
 from obscopilot.ui.settings_tab import SettingsTab
 from obscopilot.ui.commands_tab import CommandsTab
 from obscopilot.ui.viewer_stats_tab import ViewerStatsTab
+from obscopilot.ui.alerts_tab import AlertsTab
 from obscopilot.ui.about_dialog import AboutDialog
 
 class MainWindow(QMainWindow):
@@ -20,30 +21,49 @@ class MainWindow(QMainWindow):
         main_layout = QVBoxLayout(main_widget)
         
         # Create tab widget
-        self.tabs = QTabWidget()
+        self.tab_widget = QTabWidget()
         
-        # Create tabs
+        # Dashboard tab
         self.dashboard_tab = DashboardTab(self)
-        self.twitch_tab = TwitchTab(self)
-        self.obs_tab = OBSTab(self)
-        self.ai_tab = AITab(self)
-        self.workflows_tab = WorkflowsTab(self)
-        self.commands_tab = CommandsTab(self)
+        self.tab_widget.addTab(self.dashboard_tab, "Dashboard")
+        
+        # Twitch tab
+        self.twitch_tab = TwitchTab(self, self.twitch_client)
+        self.tab_widget.addTab(self.twitch_tab, "Twitch")
+        
+        # OBS tab
+        self.obs_tab = OBSTab(self, self.obs_client)
+        self.tab_widget.addTab(self.obs_tab, "OBS")
+        
+        # AI tab
+        self.ai_tab = AITab(self, self.ai_client)
+        self.tab_widget.addTab(self.ai_tab, "AI Assistant")
+        
+        # Workflows tab
+        self.workflows_tab = WorkflowsTab(self, self.workflow_engine)
+        self.tab_widget.addTab(self.workflows_tab, "Workflows")
+        
+        # Commands tab
+        self.commands_tab = CommandsTab(self, self.database, self.command_registry)
+        self.tab_widget.addTab(self.commands_tab, "Commands")
+        
+        # Viewer Stats tab
         self.viewer_stats_tab = ViewerStatsTab(self, self.database)
-        self.settings_tab = SettingsTab(self)
+        self.tab_widget.addTab(self.viewer_stats_tab, "Viewer Stats")
         
-        # Add tabs to tab widget
-        self.tabs.addTab(self.dashboard_tab, "Dashboard")
-        self.tabs.addTab(self.twitch_tab, "Twitch")
-        self.tabs.addTab(self.obs_tab, "OBS")
-        self.tabs.addTab(self.ai_tab, "AI")
-        self.tabs.addTab(self.workflows_tab, "Workflows")
-        self.tabs.addTab(self.commands_tab, "Commands")
-        self.tabs.addTab(self.viewer_stats_tab, "Viewer Stats")
-        self.tabs.addTab(self.settings_tab, "Settings")
+        # Alerts tab
+        self.alerts_tab = AlertsTab(self, self.database)
+        self.tab_widget.addTab(self.alerts_tab, "Alerts")
         
-        # Add tab widget to main layout
-        main_layout.addWidget(self.tabs)
+        # Settings tab
+        self.settings_tab = SettingsTab(self, self.config)
+        self.tab_widget.addTab(self.settings_tab, "Settings")
+        
+        main_layout.addWidget(self.tab_widget)
         
         # Set main widget
-        self.setCentralWidget(main_widget) 
+        self.setCentralWidget(main_widget)
+        
+        # Create status bar
+        self.status_bar = self.statusBar()
+        self.status_bar.showMessage("Ready") 

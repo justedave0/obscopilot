@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from obscopilot.storage.database import Database, DatabaseSession
 from obscopilot.storage.models import (
     WorkflowModel, TriggerModel, ActionModel, 
-    WorkflowExecutionModel, SettingModel, TwitchAuthModel, ViewerModel, StreamSessionModel
+    WorkflowExecutionModel, SettingModel, TwitchAuthModel, ViewerModel, StreamSessionModel, AlertModel
 )
 
 logger = logging.getLogger(__name__)
@@ -793,4 +793,76 @@ class StreamSessionRepository(Repository[StreamSessionModel]):
                 .filter(StreamSessionModel.ended_at.isnot(None)) \
                 .order_by(StreamSessionModel.started_at.desc()) \
                 .limit(limit) \
-                .all() 
+                .all()
+
+
+class AlertRepository(Repository[AlertModel]):
+    """Repository for alert templates."""
+    
+    def __init__(self, database: Database):
+        """Initialize alert repository.
+        
+        Args:
+            database: Database instance
+        """
+        super().__init__(database, AlertModel)
+    
+    def get_by_name(self, name: str) -> Optional[AlertModel]:
+        """Get alert by name.
+        
+        Args:
+            name: Alert name
+            
+        Returns:
+            Alert if found, None otherwise
+        """
+        with DatabaseSession(self.database) as session:
+            return session.query(AlertModel).filter_by(name=name).first()
+    
+    def create_alert(self, alert_data: Dict[str, Any]) -> AlertModel:
+        """Create a new alert template.
+        
+        Args:
+            alert_data: Alert data
+            
+        Returns:
+            Created alert
+        """
+        alert = AlertModel(**alert_data)
+        
+        with DatabaseSession(self.database) as session:
+            session.add(alert)
+            session.flush()
+            return alert
+    
+    def update_alert(self, alert_id: str, alert_data: Dict[str, Any]) -> Optional[AlertModel]:
+        """Update an existing alert template.
+        
+        Args:
+            alert_id: Alert ID
+            alert_data: Alert data
+            
+        Returns:
+            Updated alert or None if not found
+        """
+        with DatabaseSession(self.database) as session:
+            alert = session.query(AlertModel).filter_by(id=alert_id).first()
+            if not alert:
+                return None
+            
+            # Update alert attributes
+            for key, value in alert_data.items():
+                if hasattr(alert, key):
+                    setattr(alert, key, value)
+            
+            session.flush()
+            return alert
+    
+    def list_alerts(self) -> List[AlertModel]:
+        """Get all alert templates.
+        
+        Returns:
+            List of alert templates
+        """
+        with DatabaseSession(self.database) as session:
+            return session.query(AlertModel).order_by(AlertModel.name).all() 
