@@ -10,6 +10,7 @@ This document provides detailed information about the OBSCopilot API for develop
 4. [OBS Integration](#obs-integration)
 5. [AI Integration](#ai-integration)
 6. [Storage System](#storage-system)
+7. [UI Components](#ui-components)
 
 ## Event System
 
@@ -467,6 +468,176 @@ class SchemaManager:
         """
         # Implementation...
 ```
+
+## UI Components
+
+OBSCopilot provides several UI components that can be used to build custom interfaces or extend the application.
+
+### WorkflowEditor Class
+
+```python
+class WorkflowEditor(QWidget):
+    """Workflow editor widget for creating and editing workflows."""
+    
+    workflow_saved = pyqtSignal(object)
+    
+    def __init__(self, workflow: Optional[Workflow] = None, parent=None):
+        """Initialize workflow editor.
+        
+        Args:
+            workflow: Workflow to edit (or None for a new workflow)
+            parent: Parent widget
+        """
+        # Implementation...
+        
+    def get_workflow(self) -> Workflow:
+        """Get the current workflow from the editor.
+        
+        Returns:
+            Current workflow with all changes
+        """
+        # Implementation...
+```
+
+The WorkflowEditor provides a comprehensive interface for creating and editing workflows. It includes the following features:
+
+- Editing workflow name, description, and enabled state
+- Adding, editing, and removing triggers with a dynamic configuration UI based on trigger type
+- Adding, editing, and removing actions with a dynamic configuration UI based on action type
+- Conditional action execution based on event data
+- Importing and exporting workflows as JSON
+- Previewing workflow execution
+
+### TriggerWidget Class
+
+```python
+class TriggerWidget(QFrame):
+    """Widget for editing a workflow trigger."""
+    
+    trigger_updated = pyqtSignal(object)
+    trigger_deleted = pyqtSignal(str)
+    
+    def __init__(self, trigger: Trigger, parent=None):
+        """Initialize the trigger widget.
+        
+        Args:
+            trigger: Trigger object to edit
+            parent: Parent widget
+        """
+        # Implementation...
+```
+
+The TriggerWidget provides a UI for editing a single trigger in a workflow. It dynamically generates form fields based on the trigger type's configuration schema.
+
+### ActionWidget Class
+
+```python
+class ActionWidget(QFrame):
+    """Widget for editing a workflow action."""
+    
+    action_updated = pyqtSignal(object)
+    action_deleted = pyqtSignal(str)
+    
+    def __init__(self, action: Action, parent=None):
+        """Initialize the action widget.
+        
+        Args:
+            action: Action object to edit
+            parent: Parent widget
+        """
+        # Implementation...
+```
+
+The ActionWidget provides a UI for editing a single action in a workflow. Like the TriggerWidget, it dynamically generates form fields based on the action type's configuration schema.
+
+### Dashboard Class
+
+```python
+class Dashboard(QWidget):
+    """Dashboard widget for displaying statistics and controls."""
+    
+    def __init__(self, parent=None):
+        """Initialize dashboard.
+        
+        Args:
+            parent: Parent widget
+        """
+        # Implementation...
+        
+    def add_widget(self, widget: QWidget, name: str, gridPos: Dict[str, int] = None):
+        """Add a widget to the dashboard.
+        
+        Args:
+            widget: Widget to add
+            name: Name of the widget
+            gridPos: Grid position (x, y, w, h) or None for automatic placement
+        """
+        # Implementation...
+        
+    def remove_widget(self, name: str):
+        """Remove a widget from the dashboard.
+        
+        Args:
+            name: Name of the widget to remove
+        """
+        # Implementation...
+        
+    def save_layout(self) -> Dict:
+        """Save the current dashboard layout.
+        
+        Returns:
+            Layout configuration as a dictionary
+        """
+        # Implementation...
+        
+    def load_layout(self, layout: Dict):
+        """Load a dashboard layout.
+        
+        Args:
+            layout: Layout configuration as a dictionary
+        """
+        # Implementation...
+```
+
+The Dashboard provides a customizable grid layout for displaying various widgets like stream health, viewer statistics, and more. It supports drag-and-drop rearrangement and resizing of widgets.
+
+### StreamHealthTab Class
+
+```python
+class StreamHealthTab(QWidget):
+    """Stream health monitoring tab."""
+    
+    def __init__(self, database, obs_client, config, parent=None):
+        """Initialize stream health tab.
+        
+        Args:
+            database: Database instance
+            obs_client: OBS client instance
+            config: Configuration instance
+            parent: Parent widget
+        """
+        # Implementation...
+```
+
+The StreamHealthTab displays real-time metrics about the stream, including CPU usage, FPS, dropped frames, and more. It provides charts and alerts for monitoring stream performance.
+
+### ViewerStatsTab Class
+
+```python
+class ViewerStatsTab(QWidget):
+    """Viewer statistics tab."""
+    
+    def __init__(self, database, parent=None):
+        """Initialize viewer statistics tab.
+        
+        Args:
+            database: Database instance
+            parent: Parent widget
+        """
+        # Implementation...
+```
+
+The ViewerStatsTab displays statistics about viewers, including viewer count over time, follow events, subscription events, and more.
 
 ## Extending OBSCopilot
 

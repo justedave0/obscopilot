@@ -177,3 +177,31 @@ This document outlines the tasks for developing OBSCopilot, a cross-platform Pyt
 5. **Stream Start → Social Media Notification**
    - When stream goes live
    - Send notifications to connected platforms
+
+## Additional Recommendations
+
+Based on analysis of the current codebase, the following tasks would help complete the project:
+
+### 1. Complete Visual Workflow Editor
+
+- [x] Implement basic workflow editor UI (already done)
+- [x] Integrate editor into main application window (added template selection)
+- [x] Add workflow template gallery (implemented)
+- [ ] Implement drag-and-drop interface for actions and triggers
+- [ ] Add visual flow indicators between workflow steps
+
+### 2. Enhance Test Coverage
+
+- [x] Add UI tests for workflow editor (added)
+- [x] Add integration tests for workflow engine with services (added)
+- [ ] Create unit tests for all core components
+- [ ] Implement end-to-end testing framework
+- [ ] Add performance testing for real-time operations
+
+### 3. Improve Documentation
+
+- [x] Update API reference to include UI components (done)
+- [x] Create developer guide for extending OBSCopilot (done)
+- [ ] Add tutorial documentation with examples
+- [ ] Create video tutorials for common workflows
+- [ ] Add inline code comments for complex logic

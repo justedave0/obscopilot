@@ -34,6 +34,7 @@ from obscopilot.ui.themes import get_theme_manager, ThemeType
 from obscopilot.ui.dashboard import Dashboard
 from obscopilot.ui.shortcuts import ShortcutAction, get_shortcut_manager
 from obscopilot.ui.theme_switcher import ThemeSwitcher
+from obscopilot.ui.template_dialog import TemplateDialog
 
 logger = logging.getLogger(__name__)
 
@@ -881,7 +882,18 @@ class MainWindow(QMainWindow):
         
     def _create_workflow(self):
         """Create a new workflow."""
-        self._open_workflow_editor()
+        # Show template selection dialog
+        template_dialog = TemplateDialog(self)
+        template_dialog.template_selected.connect(self._on_template_selected)
+        template_dialog.exec()
+    
+    def _on_template_selected(self, workflow):
+        """Handle template selection.
+        
+        Args:
+            workflow: Selected workflow
+        """
+        self._open_workflow_editor(workflow)
     
     def _save_settings(self):
         """Save settings to config."""
