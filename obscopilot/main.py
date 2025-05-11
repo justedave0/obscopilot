@@ -15,11 +15,12 @@ from PyQt6.QtWidgets import QApplication
 from obscopilot import __version__
 from obscopilot.core.config import Config
 from obscopilot.core.events import event_bus
-from obscopilot.storage.database import Database
+from obscopilot.storage.database import init_database, close_database
 from obscopilot.storage.repositories import (
     WorkflowRepository, TriggerRepository, ActionRepository,
     WorkflowExecutionRepository, SettingRepository, TwitchAuthRepository
 )
+from obscopilot.storage.schema import get_schema_manager
 from obscopilot.ui.main import MainWindow
 from obscopilot.twitch.client import TwitchClient
 from obscopilot.obs.client import OBSClient
@@ -102,7 +103,7 @@ async def async_main(config_path: str = None, verbosity: int = 0) -> int:
         components.append(config)
         
         # Initialize database
-        database = Database(config.get('database', 'path', ':memory:'))
+        database = init_database(config)
         components.append(database)
         
         # Initialize repositories

@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, 
     QHBoxLayout, QLabel, QPushButton, QStatusBar, QToolBar,
     QMessageBox, QFileDialog, QMenu, QScrollArea, QFrame, QDialog, QListWidget,
-    QDialogButtonBox, QFormLayout, QLineEdit, QSpinBox, QComboBox
+    QDialogButtonBox, QFormLayout, QLineEdit, QSpinBox, QComboBox, QGroupBox
 )
 
 from obscopilot.core.config import Config
@@ -29,6 +29,11 @@ from obscopilot.ai.googleai import GoogleAIClient
 from obscopilot.ui.viewer_stats_tab import ViewerStatsTab
 from obscopilot.ui.alerts_tab import AlertsTab
 from obscopilot.ui.stream_health_tab import StreamHealthTab
+from obscopilot.ui.workflow_editor import WorkflowEditor
+from obscopilot.ui.themes import get_theme_manager, ThemeType
+from obscopilot.ui.dashboard import Dashboard
+from obscopilot.ui.shortcuts import ShortcutAction, get_shortcut_manager
+from obscopilot.ui.theme_switcher import ThemeSwitcher
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +145,10 @@ class MainWindow(QMainWindow):
         
         # Apply theme
         self._apply_theme()
+        
+        # Initialize shortcut manager
+        self.shortcut_manager = get_shortcut_manager(self)
+        self._setup_shortcuts()
     
     def set_dependencies(
         self,
@@ -191,6 +200,11 @@ class MainWindow(QMainWindow):
     
     def _init_ui(self):
         """Initialize the UI components."""
+        # Apply theme
+        theme_value = self.config.get("ui", "theme", "dark")
+        theme_type = ThemeType.LIGHT if theme_value == "light" else ThemeType.DARK
+        get_theme_manager().apply_theme(QApplication.instance(), theme_type)
+        
         # Create central widget and main layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -236,186 +250,14 @@ class MainWindow(QMainWindow):
         self._init_settings()
     
     def _init_dashboard(self):
-        """Initialize dashboard tab components."""
-        # Main container
-        dashboard_container = QWidget()
-        dashboard_container_layout = QVBoxLayout(dashboard_container)
-        dashboard_container_layout.setContentsMargins(0, 0, 0, 0)
-        dashboard_container_layout.setSpacing(20)
-        
-        # Header section
-        header_container = QWidget()
-        header_layout = QVBoxLayout(header_container)
-        header_layout.setContentsMargins(0, 0, 0, 0)
-        
-        dashboard_title = QLabel("Dashboard")
-        dashboard_title.setFont(QFont("Arial", 18, QFont.Weight.Bold))
-        header_layout.addWidget(dashboard_title)
-        
-        dashboard_subtitle = QLabel("Overview of your streaming setup")
-        dashboard_subtitle.setFont(QFont("Arial", 12))
-        dashboard_subtitle.setStyleSheet("color: #888888;")
-        header_layout.addWidget(dashboard_subtitle)
-        
-        dashboard_container_layout.addWidget(header_container)
-        
-        # Status cards row
-        status_container = QWidget()
-        status_layout = QHBoxLayout(status_container)
-        status_layout.setContentsMargins(0, 0, 0, 0)
-        status_layout.setSpacing(15)
-        
-        # Twitch status card
-        twitch_card = QFrame()
-        twitch_card.setFrameShape(QFrame.Shape.StyledPanel)
-        twitch_card.setStyleSheet(
-            "QFrame { background-color: #2D2D30; border-radius: 8px; padding: 10px; }"
+        """Initialize the dashboard tab."""
+        self.dashboard = Dashboard(
+            config=self.config,
+            stream_health_repo=None,
+            user_stats_repo=None
         )
-        twitch_card_layout = QVBoxLayout(twitch_card)
         
-        twitch_header_layout = QHBoxLayout()
-        twitch_icon_label = QLabel("🔴")  # Placeholder for an icon
-        twitch_icon_label.setFont(QFont("Arial", 16))
-        twitch_header_layout.addWidget(twitch_icon_label)
-        
-        twitch_title = QLabel("Twitch")
-        twitch_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        twitch_header_layout.addWidget(twitch_title)
-        twitch_header_layout.addStretch()
-        
-        twitch_card_layout.addLayout(twitch_header_layout)
-        
-        twitch_card_layout.addSpacing(10)
-        
-        self.twitch_status_label = QLabel("Disconnected")
-        self.twitch_status_label.setFont(QFont("Arial", 12))
-        self.twitch_status_label.setStyleSheet("color: #FF5252;")  # Red for disconnected
-        twitch_card_layout.addWidget(self.twitch_status_label)
-        
-        twitch_card_layout.addSpacing(5)
-        
-        twitch_connect_button = QPushButton("Connect")
-        twitch_connect_button.clicked.connect(self._toggle_twitch_connection)
-        twitch_card_layout.addWidget(twitch_connect_button)
-        
-        status_layout.addWidget(twitch_card)
-        
-        # OBS status card
-        obs_card = QFrame()
-        obs_card.setFrameShape(QFrame.Shape.StyledPanel)
-        obs_card.setStyleSheet(
-            "QFrame { background-color: #2D2D30; border-radius: 8px; padding: 10px; }"
-        )
-        obs_card_layout = QVBoxLayout(obs_card)
-        
-        obs_header_layout = QHBoxLayout()
-        obs_icon_label = QLabel("📹")  # Placeholder for an icon
-        obs_icon_label.setFont(QFont("Arial", 16))
-        obs_header_layout.addWidget(obs_icon_label)
-        
-        obs_title = QLabel("OBS")
-        obs_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        obs_header_layout.addWidget(obs_title)
-        obs_header_layout.addStretch()
-        
-        obs_card_layout.addLayout(obs_header_layout)
-        
-        obs_card_layout.addSpacing(10)
-        
-        self.obs_status_label = QLabel("Disconnected")
-        self.obs_status_label.setFont(QFont("Arial", 12))
-        self.obs_status_label.setStyleSheet("color: #FF5252;")  # Red for disconnected
-        obs_card_layout.addWidget(self.obs_status_label)
-        
-        obs_card_layout.addSpacing(5)
-        
-        obs_connect_button = QPushButton("Connect")
-        obs_connect_button.clicked.connect(self._toggle_obs_connection)
-        obs_card_layout.addWidget(obs_connect_button)
-        
-        status_layout.addWidget(obs_card)
-        
-        # Workflows status card
-        workflows_card = QFrame()
-        workflows_card.setFrameShape(QFrame.Shape.StyledPanel)
-        workflows_card.setStyleSheet(
-            "QFrame { background-color: #2D2D30; border-radius: 8px; padding: 10px; }"
-        )
-        workflows_card_layout = QVBoxLayout(workflows_card)
-        
-        workflows_header_layout = QHBoxLayout()
-        workflows_icon_label = QLabel("⚙️")  # Placeholder for an icon
-        workflows_icon_label.setFont(QFont("Arial", 16))
-        workflows_header_layout.addWidget(workflows_icon_label)
-        
-        workflows_title = QLabel("Workflows")
-        workflows_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        workflows_header_layout.addWidget(workflows_title)
-        workflows_header_layout.addStretch()
-        
-        workflows_card_layout.addLayout(workflows_header_layout)
-        
-        workflows_card_layout.addSpacing(10)
-        
-        self.workflows_status_label = QLabel("0 loaded")
-        self.workflows_status_label.setFont(QFont("Arial", 12))
-        workflows_card_layout.addWidget(self.workflows_status_label)
-        
-        workflows_card_layout.addSpacing(5)
-        
-        workflows_manage_button = QPushButton("Manage Workflows")
-        workflows_manage_button.clicked.connect(
-            lambda: self.tab_widget.setCurrentIndex(self.tab_widget.indexOf(self.workflows_widget))
-        )
-        workflows_card_layout.addWidget(workflows_manage_button)
-        
-        status_layout.addWidget(workflows_card)
-        
-        # AI status card
-        ai_card = QFrame()
-        ai_card.setFrameShape(QFrame.Shape.StyledPanel)
-        ai_card.setStyleSheet(
-            "QFrame { background-color: #2D2D30; border-radius: 8px; padding: 10px; }"
-        )
-        ai_card_layout = QVBoxLayout(ai_card)
-        
-        ai_header_layout = QHBoxLayout()
-        ai_icon_label = QLabel("🧠")  # Placeholder for an icon
-        ai_icon_label.setFont(QFont("Arial", 16))
-        ai_header_layout.addWidget(ai_icon_label)
-        
-        ai_title = QLabel("AI")
-        ai_title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        ai_header_layout.addWidget(ai_title)
-        ai_header_layout.addStretch()
-        
-        ai_card_layout.addLayout(ai_header_layout)
-        
-        ai_card_layout.addSpacing(10)
-        
-        self.ai_status_label = QLabel("Ready")
-        self.ai_status_label.setFont(QFont("Arial", 12))
-        self.ai_status_label.setStyleSheet("color: #4CAF50;")  # Green for ready
-        ai_card_layout.addWidget(self.ai_status_label)
-        
-        ai_card_layout.addSpacing(5)
-        
-        ai_settings_button = QPushButton("AI Settings")
-        ai_settings_button.clicked.connect(
-            lambda: self.tab_widget.setCurrentIndex(self.tab_widget.indexOf(self.settings_widget))
-        )
-        ai_card_layout.addWidget(ai_settings_button)
-        
-        status_layout.addWidget(ai_card)
-        
-        dashboard_container_layout.addWidget(status_container)
-        
-        # Dashboard tabs section - this will contain component tabs like Viewer Stats, Alerts, Stream Health, etc.
-        self.dashboard_tabs = QTabWidget()
-        dashboard_container_layout.addWidget(self.dashboard_tabs, 1)  # Give it a stretch factor of 1 to take up remaining space
-        
-        # Add dashboard to main layout
-        self.dashboard_layout.addWidget(dashboard_container)
+        self.tabs.addTab(self.dashboard, "Dashboard")
     
     def _init_connections(self):
         """Initialize connections tab components."""
@@ -548,35 +390,178 @@ class MainWindow(QMainWindow):
         self.workflows_layout.addStretch()
     
     def _init_settings(self):
-        """Initialize settings tab components."""
-        # Add settings widgets here
-        settings_label = QLabel("Settings")
-        settings_label.setFont(QFont("Arial", 16))
-        self.settings_layout.addWidget(settings_label)
+        """Initialize the settings tab."""
+        settings_widget = QWidget()
+        settings_layout = QVBoxLayout(settings_widget)
         
-        # Add a save settings button
-        settings_button_container = QWidget()
-        settings_button_layout = QHBoxLayout(settings_button_container)
+        # Settings tabs
+        settings_tabs = QTabWidget()
         
-        save_settings_button = QPushButton("Save Settings")
-        save_settings_button.clicked.connect(self._save_settings)
-        settings_button_layout.addWidget(save_settings_button)
+        # General settings
+        general_tab = QWidget()
+        general_layout = QVBoxLayout(general_tab)
         
-        settings_button_layout.addStretch()
+        # Theme settings
+        theme_group = QGroupBox("Theme")
+        theme_layout = QFormLayout(theme_group)
         
-        self.settings_layout.addWidget(settings_button_container)
+        self.theme_dropdown = QComboBox()
+        self.theme_dropdown.addItems(["Dark", "Light"])
         
-        # Add spacer
-        self.settings_layout.addStretch()
+        # Set initial theme based on config
+        theme_value = self.config.get("ui", "theme", "dark")
+        self.theme_dropdown.setCurrentIndex(1 if theme_value == "light" else 0)
+        
+        self.theme_dropdown.currentIndexChanged.connect(self._on_theme_changed)
+        theme_layout.addRow("Application Theme:", self.theme_dropdown)
+        
+        general_layout.addWidget(theme_group)
+        
+        # Twitch settings
+        twitch_group = QGroupBox("Twitch")
+        twitch_layout = QFormLayout(twitch_group)
+        
+        self.twitch_channel_edit = QLineEdit(self.config.get("twitch", "channel", ""))
+        twitch_layout.addRow("Channel:", self.twitch_channel_edit)
+        
+        self.twitch_bot_name_edit = QLineEdit(self.config.get("twitch", "bot_name", ""))
+        twitch_layout.addRow("Bot Name:", self.twitch_bot_name_edit)
+        
+        general_layout.addWidget(twitch_group)
+        
+        # OBS settings
+        obs_group = QGroupBox("OBS")
+        obs_layout = QFormLayout(obs_group)
+        
+        self.obs_host_edit = QLineEdit(self.config.get("obs", "host", "localhost"))
+        obs_layout.addRow("Host:", self.obs_host_edit)
+        
+        self.obs_port_edit = QSpinBox()
+        self.obs_port_edit.setRange(1, 65535)
+        self.obs_port_edit.setValue(int(self.config.get("obs", "port", "4455")))
+        obs_layout.addRow("Port:", self.obs_port_edit)
+        
+        general_layout.addWidget(obs_group)
+        
+        # Add save button
+        save_button = QPushButton("Save Settings")
+        save_button.clicked.connect(self._save_settings)
+        general_layout.addWidget(save_button)
+        
+        # Add general tab
+        settings_tabs.addTab(general_tab, "General")
+        
+        # Add AI settings tab
+        ai_tab = QWidget()
+        ai_layout = QVBoxLayout(ai_tab)
+        
+        # OpenAI settings
+        openai_group = QGroupBox("OpenAI")
+        openai_layout = QFormLayout(openai_group)
+        
+        self.openai_api_key_edit = QLineEdit(self.config.get("openai", "api_key", ""))
+        self.openai_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        openai_layout.addRow("API Key:", self.openai_api_key_edit)
+        
+        self.openai_model_edit = QLineEdit(self.config.get("openai", "model", "gpt-4o"))
+        openai_layout.addRow("Model:", self.openai_model_edit)
+        
+        ai_layout.addWidget(openai_group)
+        
+        # Google AI settings
+        googleai_group = QGroupBox("Google AI")
+        googleai_layout = QFormLayout(googleai_group)
+        
+        self.googleai_api_key_edit = QLineEdit(self.config.get("googleai", "api_key", ""))
+        self.googleai_api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        googleai_layout.addRow("API Key:", self.googleai_api_key_edit)
+        
+        self.googleai_model_edit = QLineEdit(self.config.get("googleai", "model", "gemini-1.5-pro"))
+        googleai_layout.addRow("Model:", self.googleai_model_edit)
+        
+        ai_layout.addWidget(googleai_group)
+        
+        # Add save button
+        save_button_ai = QPushButton("Save Settings")
+        save_button_ai.clicked.connect(self._save_settings)
+        ai_layout.addWidget(save_button_ai)
+        
+        # Add AI tab
+        settings_tabs.addTab(ai_tab, "AI")
+        
+        # Add keyboard shortcuts tab
+        from obscopilot.ui.shortcut_settings import ShortcutSettingsWidget
+        shortcuts_tab = ShortcutSettingsWidget(self.shortcut_manager)
+        settings_tabs.addTab(shortcuts_tab, "Keyboard Shortcuts")
+        
+        # Add database settings tab
+        db_tab = QWidget()
+        db_layout = QVBoxLayout(db_tab)
+        
+        # Database backup/restore
+        backup_group = QGroupBox("Backup & Restore")
+        backup_layout = QVBoxLayout(backup_group)
+        
+        backup_description = QLabel(
+            "Create a backup of your database or restore from a previous backup.\n"
+            "Backup includes workflows, settings, and statistics."
+        )
+        backup_layout.addWidget(backup_description)
+        
+        backup_buttons = QHBoxLayout()
+        
+        backup_button = QPushButton("Backup Database")
+        backup_button.clicked.connect(self._backup_database)
+        backup_buttons.addWidget(backup_button)
+        
+        restore_button = QPushButton("Restore Database")
+        restore_button.clicked.connect(self._restore_database)
+        backup_buttons.addWidget(restore_button)
+        
+        backup_layout.addLayout(backup_buttons)
+        db_layout.addWidget(backup_group)
+        
+        # Add database tab
+        settings_tabs.addTab(db_tab, "Database")
+        
+        settings_layout.addWidget(settings_tabs)
+        
+        # Add to main tabs
+        self.tabs.addTab(settings_widget, "Settings")
     
     def _create_actions(self):
         """Create application actions."""
-        # File actions
+        # Create exit action
         self.exit_action = QAction("Exit", self)
-        self.exit_action.setShortcut("Ctrl+Q")
+        self.exit_action.setShortcut(self.shortcut_manager.get_shortcut_text(ShortcutAction.EXIT))
         self.exit_action.triggered.connect(self.close)
         
-        # Help actions
+        # Create new workflow action
+        self.new_workflow_action = QAction("New Workflow", self)
+        self.new_workflow_action.setShortcut(self.shortcut_manager.get_shortcut_text(ShortcutAction.NEW_WORKFLOW))
+        self.new_workflow_action.triggered.connect(self._create_workflow)
+        
+        # Create toggle streaming action
+        self.toggle_streaming_action = QAction("Toggle Streaming", self)
+        self.toggle_streaming_action.setShortcut(self.shortcut_manager.get_shortcut_text(ShortcutAction.TOGGLE_STREAMING))
+        self.toggle_streaming_action.triggered.connect(self._toggle_streaming)
+        
+        # Create toggle recording action
+        self.toggle_recording_action = QAction("Toggle Recording", self)
+        self.toggle_recording_action.setShortcut(self.shortcut_manager.get_shortcut_text(ShortcutAction.TOGGLE_RECORDING))
+        self.toggle_recording_action.triggered.connect(self._toggle_recording)
+        
+        # Create scene selector action
+        self.scene_selector_action = QAction("Scene Selector", self)
+        self.scene_selector_action.setShortcut(self.shortcut_manager.get_shortcut_text(ShortcutAction.SCENE_SELECTOR))
+        self.scene_selector_action.triggered.connect(self._show_scene_selector)
+        
+        # Create toggle theme action
+        self.toggle_theme_action = QAction("Toggle Theme", self)
+        self.toggle_theme_action.setShortcut(self.shortcut_manager.get_shortcut_text(ShortcutAction.TOGGLE_THEME))
+        self.toggle_theme_action.triggered.connect(self._toggle_theme)
+        
+        # Create about action
         self.about_action = QAction("About", self)
         self.about_action.triggered.connect(self._show_about)
     
@@ -597,10 +582,19 @@ class MainWindow(QMainWindow):
         self.addToolBar(main_toolbar)
     
     def _create_status_bar(self):
-        """Create application status bar."""
-        self.status_bar = QStatusBar()
-        self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage("Ready")
+        """Create the status bar."""
+        self.status_bar = self.statusBar()
+        
+        # Add connection status labels
+        self.twitch_status_label = QLabel("Twitch: Disconnected")
+        self.status_bar.addPermanentWidget(self.twitch_status_label)
+        
+        self.obs_status_label = QLabel("OBS: Disconnected")
+        self.status_bar.addPermanentWidget(self.obs_status_label)
+        
+        # Add theme switcher
+        self.theme_switcher = ThemeSwitcher(self.config)
+        self.status_bar.addPermanentWidget(self.theme_switcher)
     
     def _apply_theme(self):
         """Apply the configured theme."""
@@ -835,83 +829,103 @@ class MainWindow(QMainWindow):
             self.status_bar.showMessage(f"Workflow not found: {workflow_id}")
             return
         
-        # TODO: Implement workflow editor
-        QMessageBox.information(
-            self, 
-            "Edit Workflow", 
-            f"Workflow editor not implemented yet. Would edit: {workflow.name}"
-        )
-    
-    def _toggle_workflow(self, workflow_id):
-        """Toggle the enabled state of a workflow.
+        # Create and show workflow editor
+        self._open_workflow_editor(workflow)
+        
+    def _open_workflow_editor(self, workflow=None):
+        """Open the workflow editor.
         
         Args:
-            workflow_id: ID of the workflow to toggle
+            workflow: Workflow to edit (or None for a new workflow)
         """
-        if not self.workflow_engine:
-            self.status_bar.showMessage("Workflow engine not initialized")
-            return
+        # Close existing editor if open
+        if hasattr(self, 'workflow_editor_tab_index') and self.workflow_editor_tab_index is not None:
+            self.tab_widget.removeTab(self.workflow_editor_tab_index)
+            self.workflow_editor_tab_index = None
         
-        workflow = self.workflow_engine.workflows.get(workflow_id)
-        if not workflow:
-            self.status_bar.showMessage(f"Workflow not found: {workflow_id}")
-            return
+        # Create workflow editor widget
+        self.workflow_editor = WorkflowEditor(workflow)
+        self.workflow_editor.workflow_saved.connect(self._on_workflow_saved)
         
-        # Toggle enabled state
-        workflow.enabled = not workflow.enabled
-        
-        # Update in database
-        self.workflow_repo.update(workflow)
-        
-        # Update UI
-        self.status_bar.showMessage(
-            f"Workflow {'enabled' if workflow.enabled else 'disabled'}: {workflow.name}"
+        # Add to tabs
+        self.workflow_editor_tab_index = self.tab_widget.addTab(
+            self.workflow_editor,
+            f"{'Edit' if workflow else 'New'} Workflow"
         )
-        self.refresh_workflows()
-    
-    def _load_workflow(self):
-        """Load a workflow from file."""
-        if not self.workflow_engine:
-            self.status_bar.showMessage("Workflow engine not initialized")
-            return
+        
+        # Switch to editor tab
+        self.tab_widget.setCurrentIndex(self.workflow_editor_tab_index)
+        
+    def _on_workflow_saved(self, workflow):
+        """Handle workflow saving.
+        
+        Args:
+            workflow: Saved workflow or None if cancelled
+        """
+        # Close editor tab
+        if hasattr(self, 'workflow_editor_tab_index') and self.workflow_editor_tab_index is not None:
+            self.tab_widget.removeTab(self.workflow_editor_tab_index)
+            self.workflow_editor_tab_index = None
             
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Load Workflow",
-            "",
-            "JSON Files (*.json)"
-        )
+        if workflow and workflow != self.workflow_editor.original_workflow:
+            # Save workflow to database
+            self.workflow_repo.update(workflow)
+            
+            # Update in engine
+            self.workflow_engine.register_workflow(workflow)
+            
+            # Update UI
+            self.refresh_workflows()
+            
+            self.status_bar.showMessage(f"Workflow saved: {workflow.name}")
         
-        if file_path:
-            try:
-                with open(file_path, 'r') as f:
-                    workflow_json = f.read()
-                    
-                # Create workflow in database
-                workflow = self.workflow_repo.create_from_json(workflow_json)
-                
-                # Register workflow with engine
-                self.workflow_engine.register_workflow(workflow)
-                
-                self.status_bar.showMessage(f"Loaded workflow: {workflow.name}")
-                
-                # Refresh the workflow list
-                self.refresh_workflows()
-            except Exception as e:
-                logger.error(f"Error loading workflow: {e}")
-                self.status_bar.showMessage("Error loading workflow")
-                QMessageBox.warning(self, "Load Error", f"Failed to load workflow: {str(e)}")
-    
     def _create_workflow(self):
         """Create a new workflow."""
-        # TODO: Implement workflow creation
-        QMessageBox.information(self, "Not Implemented", "Workflow creation not implemented yet")
+        self._open_workflow_editor()
     
     def _save_settings(self):
-        """Save application settings."""
+        """Save settings to config."""
+        # OBS settings
+        self.config.set("obs", "host", self.obs_host_edit.text())
+        self.config.set("obs", "port", str(self.obs_port_edit.value()))
+        
+        # Twitch settings
+        self.config.set("twitch", "channel", self.twitch_channel_edit.text())
+        self.config.set("twitch", "bot_name", self.twitch_bot_name_edit.text())
+        
+        # OpenAI settings
+        self.config.set("openai", "api_key", self.openai_api_key_edit.text())
+        self.config.set("openai", "model", self.openai_model_edit.text())
+        
+        # Google AI settings
+        self.config.set("googleai", "api_key", self.googleai_api_key_edit.text())
+        self.config.set("googleai", "model", self.googleai_model_edit.text())
+        
+        # Save config
         self.config.save()
-        self.status_bar.showMessage("Settings saved")
-        QMessageBox.information(self, "Settings Saved", "Settings have been saved successfully")
+        
+        # Show confirmation
+        self.status_bar.showMessage("Settings saved successfully", 3000)
+        
+        # Apply theme (in case it changed)
+        self._apply_theme()
+    
+    def _on_theme_changed(self, index):
+        """Handle theme selection changes.
+        
+        Args:
+            index: Selected index
+        """
+        # Get theme type
+        theme_type = ThemeType.LIGHT if index == 1 else ThemeType.DARK
+        
+        # Save to config
+        theme_str = "light" if theme_type == ThemeType.LIGHT else "dark"
+        self.config.set("ui", "theme", theme_str)
+        self.config.save()
+        
+        # Apply theme
+        get_theme_manager().apply_theme(QApplication.instance(), theme_type)
     
     def _show_about(self):
         """Show about dialog."""
@@ -1174,4 +1188,134 @@ class MainWindow(QMainWindow):
                 event_bus.emit_sync(test_event)
                 self.status_bar.showMessage(f"Test {alert_type} alert triggered")
             else:
-                self.status_bar.showMessage("Invalid alert type") 
+                self.status_bar.showMessage("Invalid alert type")
+
+    def _backup_database(self):
+        """Backup the database."""
+        if not hasattr(self, 'schema_manager') or not self.schema_manager:
+            from obscopilot.storage.schema import get_schema_manager
+            self.schema_manager = get_schema_manager(self.config)
+            
+        # Get backup file path
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Backup Database",
+            "",
+            "Database Backup Files (*.bak)"
+        )
+        
+        if file_path:
+            # Ensure file has .bak extension
+            if not file_path.endswith('.bak'):
+                file_path += '.bak'
+                
+            # Perform backup
+            success = self.schema_manager.backup_database(file_path)
+            
+            if success:
+                self.status_bar.showMessage(f"Database backed up to {file_path}")
+                QMessageBox.information(self, "Backup Successful", f"Database backed up to {file_path}")
+            else:
+                self.status_bar.showMessage("Database backup failed")
+                QMessageBox.warning(self, "Backup Failed", "Failed to backup database")
+                
+    def _restore_database(self):
+        """Restore the database from backup."""
+        if not hasattr(self, 'schema_manager') or not self.schema_manager:
+            from obscopilot.storage.schema import get_schema_manager
+            self.schema_manager = get_schema_manager(self.config)
+            
+        # Show warning
+        confirm = QMessageBox.warning(
+            self,
+            "Restore Database",
+            "Restoring from backup will replace your current database. This action cannot be undone. Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+            
+        # Get backup file path
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Restore Database",
+            "",
+            "Database Backup Files (*.bak)"
+        )
+        
+        if file_path:
+            # Perform restore
+            success = self.schema_manager.restore_database(file_path)
+            
+            if success:
+                self.status_bar.showMessage(f"Database restored from {file_path}")
+                QMessageBox.information(
+                    self, 
+                    "Restore Successful", 
+                    f"Database restored from {file_path}. Please restart the application for changes to take effect."
+                )
+            else:
+                self.status_bar.showMessage("Database restore failed")
+                QMessageBox.warning(self, "Restore Failed", "Failed to restore database")
+
+    def _setup_shortcuts(self):
+        """Set up keyboard shortcuts for the application."""
+        shortcut_handlers = {
+            ShortcutAction.EXIT: self.close,
+            ShortcutAction.TOGGLE_THEME: self._toggle_theme,
+            ShortcutAction.NEW_WORKFLOW: self._create_workflow,
+            ShortcutAction.TOGGLE_TWITCH: lambda: self._toggle_twitch_connection(),
+            ShortcutAction.TOGGLE_OBS: lambda: self._toggle_obs_connection(),
+            ShortcutAction.TOGGLE_STREAMING: self._toggle_streaming,
+            ShortcutAction.TOGGLE_RECORDING: self._toggle_recording,
+            ShortcutAction.TAB_DASHBOARD: lambda: self.tab_widget.setCurrentIndex(0),
+            ShortcutAction.TAB_CONNECTIONS: lambda: self.tab_widget.setCurrentIndex(1),
+            ShortcutAction.TAB_WORKFLOWS: lambda: self.tab_widget.setCurrentIndex(2),
+            ShortcutAction.TAB_SETTINGS: lambda: self.tab_widget.setCurrentIndex(3),
+            ShortcutAction.SCENE_SELECTOR: self._show_scene_selector,
+        }
+        
+        self.shortcut_manager.register_shortcuts(shortcut_handlers)
+
+    def _toggle_theme(self):
+        """Toggle between light and dark themes."""
+        theme_manager = get_theme_manager()
+        theme_manager.toggle_theme(QApplication.instance())
+        
+        # Update theme setting in config
+        new_theme = "light" if theme_manager.current_theme == ThemeType.LIGHT else "dark"
+        self.config.set("ui", "theme", new_theme)
+        self.config.save()
+        
+        # Update theme dropdown in settings if it exists
+        if hasattr(self, 'theme_dropdown'):
+            index = 1 if new_theme == "light" else 0
+            self.theme_dropdown.setCurrentIndex(index)
+        
+        # Apply theme
+        self._apply_theme()
+    
+    def _toggle_workflow(self, workflow_id):
+        """Toggle workflow state."""
+        if not self.workflow_engine:
+            self.status_bar.showMessage("Workflow engine not initialized")
+            return
+        
+        workflow = self.workflow_engine.workflows.get(workflow_id)
+        if not workflow:
+            self.status_bar.showMessage(f"Workflow not found: {workflow_id}")
+            return
+        
+        # Toggle workflow state
+        workflow.enabled = not workflow.enabled
+        self.workflow_repo.update(workflow)
+        
+        # Update in engine
+        self.workflow_engine.register_workflow(workflow)
+        
+        # Update UI
+        self.refresh_workflows()
+        
+        self.status_bar.showMessage(f"Workflow state toggled: {workflow.name}") 
