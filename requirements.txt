@@ -1,0 +1,39 @@
+# Twitch API Integration
+twitchio==2.10.0
+twitchAPI>=3.0.0
+
+# GUI Framework
+PyQt6==6.9.0
+PyQt6-Qt6==6.5.3
+PyQt6-sip==13.6.0
+
+# OBS Integration
+obs-websocket-py==1.0
+websocket-client==1.6.3
+
+# Workflow Engine
+spiffworkflow>=1.2.0
+pydantic==2.5.2
+
+# OpenAI Integration
+openai>=1.0.0
+
+# Storage and Configuration
+sqlalchemy==2.0.40
+alembic==1.12.1
+python-dotenv>=1.0.0
+
+# Utilities
+aiohttp==3.9.1
+requests==2.31.0
+toml==0.10.2
+pyyaml>=6.0
+validators==0.22.0
+beautifulsoup4==4.12.2
+
+# Development Tools
+pytest==7.4.3
+black==23.11.0
+isort==5.12.0
+mypy==1.7.1
+flake8==6.1.0

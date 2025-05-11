@@ -1,0 +1,2 @@
+[console_scripts]
+obscopilot = obscopilot.main:main
