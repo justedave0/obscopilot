@@ -1,0 +1,85 @@
+{
+  "id": "channel_points_reward_template",
+  "name": "Channel Points Reward Action",
+  "description": "Performs custom actions when viewers redeem channel points rewards",
+  "version": "1.0.0",
+  "enabled": true,
+  "data": {
+    "triggers": [
+      {
+        "id": "points_redeem_trigger",
+        "name": "Channel Points Redemption",
+        "type": "TWITCH_CHANNEL_POINTS_REDEEM",
+        "config": {
+          "reward_id": "{{ YOUR_REWARD_ID }}",
+          "reward_title": "Show Emote"
+        }
+      }
+    ],
+    "actions": [
+      {
+        "id": "show_image_source",
+        "name": "Show Image Source",
+        "type": "OBS_SET_SOURCE_VISIBILITY",
+        "config": {
+          "source_name": "RewardImage",
+          "visible": true,
+          "scene_name": "{{ current_scene }}"
+        }
+      },
+      {
+        "id": "play_sound",
+        "name": "Play Reward Sound",
+        "type": "PLAY_SOUND",
+        "config": {
+          "file_path": "assets/sounds/reward_redeem.wav",
+          "volume": 0.7
+        }
+      },
+      {
+        "id": "set_redeemer_text",
+        "name": "Set Redeemer Text",
+        "type": "OBS_SET_TEXT",
+        "config": {
+          "source_name": "RedeemerText",
+          "text": "{{ event.user_name }} just redeemed {{ event.reward_title }}"
+        }
+      },
+      {
+        "id": "chat_acknowledgment",
+        "name": "Send Acknowledgment",
+        "type": "TWITCH_CHAT_MESSAGE",
+        "config": {
+          "message": "Thanks for the redemption, @{{ event.user_name }}! {{ event.user_input }}"
+        }
+      },
+      {
+        "id": "delay",
+        "name": "Display Duration",
+        "type": "DELAY",
+        "config": {
+          "duration": 6000
+        }
+      },
+      {
+        "id": "hide_image_source",
+        "name": "Hide Image Source",
+        "type": "OBS_SET_SOURCE_VISIBILITY",
+        "config": {
+          "source_name": "RewardImage",
+          "visible": false,
+          "scene_name": "{{ current_scene }}"
+        }
+      },
+      {
+        "id": "clear_text",
+        "name": "Clear Text",
+        "type": "OBS_SET_TEXT",
+        "config": {
+          "source_name": "RedeemerText",
+          "text": ""
+        }
+      }
+    ]
+  }
+} 

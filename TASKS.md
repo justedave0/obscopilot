@@ -40,40 +40,40 @@ This document outlines the tasks for developing OBSCopilot, a cross-platform Pyt
 - [x] Research Python GUI frameworks for cross-platform compatibility
 - [x] Research OBS integration via websocket
 - [x] Research workflow automation solutions
-- [ ] Set up project structure and virtual environment
-- [ ] Create requirements.txt with necessary dependencies
-- [ ] Design application architecture (MVC pattern)
-- [ ] Create CI/CD pipeline for cross-platform builds
+- [x] Set up project structure and virtual environment
+- [x] Create requirements.txt with necessary dependencies
+- [x] Design application architecture (MVC pattern)
+- [x] Create CI/CD pipeline for cross-platform builds
 
 ## 2. Twitch API Integration
 
-- [ ] Implement Twitch API authentication (broadcaster and bot accounts)
-- [ ] Create connection management for Twitch accounts
-- [ ] Implement event listeners for all required Twitch events:
-  - [ ] Channel follows
-  - [ ] Subscriptions (new, gifts, resubs)
-  - [ ] Bits/Cheers
-  - [ ] Channel point redemptions
-  - [ ] Raids
-  - [ ] Chat messages
-  - [ ] Stream status changes (online/offline)
-- [ ] Design credentials storage and secure token refresh mechanisms
-- [ ] Implement error handling and reconnection strategies
+- [x] Implement Twitch API authentication (broadcaster and bot accounts)
+- [x] Create connection management for Twitch accounts
+- [x] Implement event listeners for all required Twitch events:
+  - [x] Channel follows
+  - [x] Subscriptions (new, gifts, resubs)
+  - [x] Bits/Cheers
+  - [x] Channel point redemptions
+  - [x] Raids
+  - [x] Chat messages
+  - [x] Stream status changes (online/offline)
+- [x] Design credentials storage and secure token refresh mechanisms
+- [x] Implement error handling and reconnection strategies
 
 ## 3. Workflow Engine
 
-- [ ] Design workflow model (triggers, conditions, actions)
+- [x] Design workflow model (triggers, conditions, actions)
 - [ ] Create visual workflow builder component
-- [ ] Implement workflow execution engine
-- [ ] Create standard action library:
-  - [ ] Chat messages (bot responses)
-  - [ ] OBS scene/source control
-  - [ ] External API calls
-  - [ ] Sound playback
-  - [ ] File operations
-  - [ ] Timer/delay functions
-- [ ] Implement workflow import/export functionality
-- [ ] Create workflow templates for common use cases
+- [x] Implement workflow execution engine
+- [x] Create standard action library:
+  - [x] Chat messages (bot responses)
+  - [x] OBS scene/source control
+  - [x] External API calls
+  - [x] Sound playback
+  - [x] File operations
+  - [x] Timer/delay functions
+- [x] Implement workflow import/export functionality
+- [x] Create workflow templates for common use cases
 
 ## 4. OBS Integration
 
