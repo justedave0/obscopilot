@@ -7,6 +7,7 @@ This module provides integration with OBS Studio via the WebSocket protocol v5 (
 import asyncio
 import logging
 import time
+import uuid
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import simpleobsws
@@ -450,14 +451,34 @@ class OBSClient:
         logger.debug(f"Transition from {from_scene} to {to_scene}")
     
     async def _handle_stream_started(self, data):
-        """Handle stream started event."""
-        logger.info("Streaming started in OBS")
-        await event_bus.emit(Event(EventType.OBS_STREAMING_STARTED))
+        """Handle stream started event.
+        
+        Args:
+            data: Event data
+        """
+        logger.info("OBS Stream started")
+        session_id = str(uuid.uuid4())
+        await event_bus.emit(Event(EventType.OBS_STREAM_STARTED, {
+            'session_id': session_id,
+            'timestamp': time.time(),
+            'output_path': data.get('outputPath', '')
+        }))
     
     async def _handle_stream_stopped(self, data):
-        """Handle stream stopped event."""
-        logger.info("Streaming stopped in OBS")
-        await event_bus.emit(Event(EventType.OBS_STREAMING_STOPPED))
+        """Handle stream stopped event.
+        
+        Args:
+            data: Event data
+        """
+        logger.info("OBS Stream stopped")
+        await event_bus.emit(Event(EventType.OBS_STREAM_STOPPED, {
+            'timestamp': time.time(),
+            'output_path': data.get('outputPath', ''),
+            'bytes_sent': data.get('bytesSent', 0),
+            'duration': data.get('outputDuration', 0),
+            'frames': data.get('outputTotalFrames', 0),
+            'skipped_frames': data.get('outputSkippedFrames', 0)
+        }))
     
     async def _handle_recording_started(self, data):
         """Handle recording started event."""
@@ -603,4 +624,105 @@ class OBSClient:
             return True
         except Exception as e:
             logger.error(f"Error setting source text: {e}")
-            return False 
+            return False
+    
+    @_check_connection
+    async def get_stream_status(self) -> Optional[Dict[str, Any]]:
+        """Get the current streaming status.
+        
+        Returns:
+            Dictionary with stream status info or None on error
+        """
+        try:
+            request = simpleobsws.Request('GetStreamStatus')
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                logger.error(f"Error getting stream status: {response.error()}")
+                return None
+                
+            return response.responseData
+        except Exception as e:
+            logger.error(f"Error getting stream status: {e}")
+            return None
+    
+    @_check_connection
+    async def get_stats(self) -> Optional[Dict[str, Any]]:
+        """Get OBS statistics including CPU usage, memory usage, frames, etc.
+        
+        Returns:
+            Dictionary with OBS statistics or None on error
+        """
+        try:
+            request = simpleobsws.Request('GetStats')
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                logger.error(f"Error getting OBS stats: {response.error()}")
+                return None
+                
+            return response.responseData
+        except Exception as e:
+            logger.error(f"Error getting OBS stats: {e}")
+            return None
+    
+    @_check_connection
+    async def get_stream_health(self) -> Optional[Dict[str, Any]]:
+        """Get comprehensive stream health information by combining multiple API calls.
+        
+        Returns:
+            Dictionary with combined stream health metrics or None on error
+        """
+        try:
+            # Get general OBS stats (CPU, memory, etc.)
+            stats = await self.get_stats()
+            if not stats:
+                return None
+                
+            # Get stream status (bitrate, dropped frames, etc.)
+            stream_status = await self.get_stream_status()
+            if not stream_status:
+                return None
+                
+            # Combine data into a comprehensive health report
+            health_data = {
+                # OBS statistics
+                'fps': stats.get('activeFps'),
+                'render_total_frames': stats.get('renderTotalFrames'),
+                'render_missed_frames': stats.get('renderMissedFrames'),
+                'output_total_frames': stats.get('outputTotalFrames'),
+                'output_skipped_frames': stats.get('outputSkippedFrames'),
+                'average_frame_time': stats.get('averageFrameRenderTime'),
+                'cpu_usage': stats.get('cpuUsage'),
+                'memory_usage': stats.get('memoryUsage'),
+                'free_disk_space': stats.get('availableDiskSpace'),
+                
+                # Stream statistics
+                'bitrate': stream_status.get('outputBytes') / 128 / (stream_status.get('outputDuration', 1) / 1000) if stream_status.get('outputBytes') else 0,
+                'num_dropped_frames': stream_status.get('outputSkippedFrames', 0),
+                'num_total_frames': stream_status.get('outputTotalFrames', 0),
+                'strain': None,  # Not directly available
+                'stream_duration': stream_status.get('outputDuration', 0) / 1000 if stream_status.get('outputDuration') else 0,
+                
+                # Network statistics
+                'kbits_per_sec': stream_status.get('kbitsPerSec', 0),
+                'ping': None,  # Not directly available
+                
+                # Raw data for reference
+                'raw_stats': stats,
+                'raw_stream_status': stream_status
+            }
+            
+            # Calculate drop percentage
+            total_frames = health_data['num_total_frames']
+            dropped_frames = health_data['num_dropped_frames']
+            
+            if total_frames > 0:
+                health_data['drop_percentage'] = (dropped_frames / total_frames) * 100
+            else:
+                health_data['drop_percentage'] = 0
+                
+            return health_data
+        except Exception as e:
+            logger.error(f"Error getting stream health: {e}")
+            return None 

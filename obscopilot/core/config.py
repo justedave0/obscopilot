@@ -33,39 +33,44 @@ class Config:
         'twitch': {
             'broadcaster_client_id': '',
             'broadcaster_client_secret': '',
-            'broadcaster_id': '',
+            'broadcaster_refresh_token': '',
             'bot_client_id': '',
             'bot_client_secret': '',
-            'redirect_uri': 'http://localhost:17563',
-            'scopes': [
-                'chat:read', 'chat:edit', 
-                'channel:read:redemptions', 'channel:manage:redemptions',
-                'channel:read:subscriptions',
-                'bits:read',
-                'channel:moderate',
-                'user:read:follows',
-            ],
+            'bot_refresh_token': '',
+            'channel': '',
+            'auto_connect': False,
         },
         'obs': {
             'host': 'localhost',
             'port': 4455,
             'password': '',
-            'auto_connect': True,
+            'auto_connect': False,
         },
         'openai': {
             'api_key': '',
             'model': 'gpt-3.5-turbo',
+            'max_tokens': 1024,
             'temperature': 0.7,
-            'max_tokens': 150,
-            'max_context_messages': 20,
+            'auto_link': False,
         },
         'googleai': {
             'api_key': '',
-            'model': 'gemini-2.0-flash-001',
-            'vision_model': 'gemini-2.0-pro-vision-001',
+            'model': 'gemini-pro',
+            'max_tokens': 1024,
             'temperature': 0.7,
-            'max_tokens': 150,
-            'max_context_messages': 20,
+            'auto_link': False,
+        },
+        'stream_health': {
+            'monitoring_interval': 15,  # seconds
+            'cpu_warning_threshold': 70,  # percentage
+            'cpu_critical_threshold': 90,  # percentage
+            'drop_warning_threshold': 1,  # percentage
+            'drop_critical_threshold': 5,  # percentage
+            'enable_notifications': True,
+            'record_history': True,
+        },
+        'database': {
+            'url': 'sqlite:///obscopilot.db',
         },
         'workflows': {
             'auto_load': True,

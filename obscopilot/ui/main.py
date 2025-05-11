@@ -26,6 +26,9 @@ from obscopilot.obs.client import OBSClient
 from obscopilot.workflows.engine import WorkflowEngine
 from obscopilot.ai.openai import OpenAIClient
 from obscopilot.ai.googleai import GoogleAIClient
+from obscopilot.ui.viewer_stats_tab import ViewerStatsTab
+from obscopilot.ui.alerts_tab import AlertsTab
+from obscopilot.ui.stream_health_tab import StreamHealthTab
 
 logger = logging.getLogger(__name__)
 
@@ -159,9 +162,9 @@ class MainWindow(QMainWindow):
             workflow_engine: Workflow engine instance
             openai_client: OpenAI client instance
             googleai_client: Google AI client instance
-            workflow_repo: Workflow repository instance
-            setting_repo: Setting repository instance
-            twitch_auth_repo: Twitch authentication repository instance
+            workflow_repo: Workflow repository
+            setting_repo: Setting repository
+            twitch_auth_repo: Twitch auth repository
         """
         self.database = database
         self.twitch_client = twitch_client
@@ -173,7 +176,17 @@ class MainWindow(QMainWindow):
         self.setting_repo = setting_repo
         self.twitch_auth_repo = twitch_auth_repo
         
-        # Update UI based on dependencies
+        # Create component tabs after dependencies are set
+        self.viewer_stats_tab = ViewerStatsTab(database)
+        self.alerts_tab = AlertsTab(database, obs_client, config=self.config)
+        self.stream_health_tab = StreamHealthTab(database, obs_client, self.config)
+        
+        # Add component tabs to the dashboard
+        self.dashboard_tabs.addTab(self.viewer_stats_tab, "Viewer Stats")
+        self.dashboard_tabs.addTab(self.alerts_tab, "Alerts")
+        self.dashboard_tabs.addTab(self.stream_health_tab, "Stream Health")
+        
+        # Update connection status initially
         self._update_connection_status()
     
     def _init_ui(self):
@@ -397,62 +410,11 @@ class MainWindow(QMainWindow):
         
         dashboard_container_layout.addWidget(status_container)
         
-        # Quick actions section
-        actions_container = QWidget()
-        actions_layout = QVBoxLayout(actions_container)
-        actions_layout.setContentsMargins(0, 0, 0, 0)
+        # Dashboard tabs section - this will contain component tabs like Viewer Stats, Alerts, Stream Health, etc.
+        self.dashboard_tabs = QTabWidget()
+        dashboard_container_layout.addWidget(self.dashboard_tabs, 1)  # Give it a stretch factor of 1 to take up remaining space
         
-        actions_header = QLabel("Quick Actions")
-        actions_header.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        actions_layout.addWidget(actions_header)
-        
-        actions_buttons_layout = QHBoxLayout()
-        actions_buttons_layout.setSpacing(10)
-        
-        toggle_stream_button = QPushButton("Toggle Stream")
-        toggle_stream_button.setMinimumHeight(40)
-        toggle_stream_button.clicked.connect(self._toggle_streaming)
-        actions_buttons_layout.addWidget(toggle_stream_button)
-        
-        toggle_recording_button = QPushButton("Toggle Recording")
-        toggle_recording_button.setMinimumHeight(40)
-        toggle_recording_button.clicked.connect(self._toggle_recording)
-        actions_buttons_layout.addWidget(toggle_recording_button)
-        
-        scene_switch_button = QPushButton("Switch Scene")
-        scene_switch_button.setMinimumHeight(40)
-        scene_switch_button.clicked.connect(self._show_scene_selector)
-        actions_buttons_layout.addWidget(scene_switch_button)
-        
-        test_alert_button = QPushButton("Test Alert")
-        test_alert_button.setMinimumHeight(40)
-        test_alert_button.clicked.connect(self._test_alert)
-        actions_buttons_layout.addWidget(test_alert_button)
-        
-        actions_layout.addLayout(actions_buttons_layout)
-        
-        dashboard_container_layout.addWidget(actions_container)
-        
-        # Stats section (placeholder for future metrics)
-        stats_container = QWidget()
-        stats_layout = QVBoxLayout(stats_container)
-        stats_layout.setContentsMargins(0, 0, 0, 0)
-        
-        stats_header = QLabel("Stream Statistics")
-        stats_header.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        stats_layout.addWidget(stats_header)
-        
-        stats_placeholder = QLabel("Stream statistics will be displayed here")
-        stats_placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        stats_placeholder.setStyleSheet("color: #888888; padding: 20px;")
-        stats_layout.addWidget(stats_placeholder)
-        
-        dashboard_container_layout.addWidget(stats_container)
-        
-        # Add spacer to push everything to the top
-        dashboard_container_layout.addStretch()
-        
-        # Add the main container to the dashboard layout
+        # Add dashboard to main layout
         self.dashboard_layout.addWidget(dashboard_container)
     
     def _init_connections(self):

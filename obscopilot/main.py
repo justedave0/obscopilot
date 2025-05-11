@@ -23,9 +23,11 @@ from obscopilot.storage.repositories import (
 from obscopilot.ui.main import MainWindow
 from obscopilot.twitch.client import TwitchClient
 from obscopilot.obs.client import OBSClient
+from obscopilot.obs.stream_health import StreamHealthMonitor
 from obscopilot.workflows.engine import WorkflowEngine
 from obscopilot.ai.openai import OpenAIClient
 from obscopilot.ai.googleai import GoogleAIClient
+from obscopilot.twitch.viewer_stats import ViewerStatsTracker
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +137,18 @@ async def async_main(config_path: str = None, verbosity: int = 0) -> int:
             googleai_client
         )
         components.append(workflow_engine)
+        
+        # Initialize viewer stats
+        viewer_stats = ViewerStatsTracker(database)
+        await viewer_stats.start()
+        
+        # Initialize stream health monitor
+        stream_health_monitor = StreamHealthMonitor(
+            obs_client,
+            database,
+            config
+        )
+        await stream_health_monitor.start()
         
         # Create Qt application
         app = QApplication(sys.argv)

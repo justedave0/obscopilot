@@ -8,13 +8,16 @@ import datetime
 import json
 import logging
 from typing import Dict, List, Optional, Any, Type, TypeVar, Generic
+import uuid
+import time
 
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from obscopilot.storage.database import Database, DatabaseSession
 from obscopilot.storage.models import (
     WorkflowModel, TriggerModel, ActionModel, 
-    WorkflowExecutionModel, SettingModel, TwitchAuthModel, ViewerModel, StreamSessionModel, AlertModel
+    WorkflowExecutionModel, SettingModel, TwitchAuthModel, ViewerModel, StreamSessionModel, AlertModel, StreamHealthModel
 )
 
 logger = logging.getLogger(__name__)
@@ -865,4 +868,156 @@ class AlertRepository(Repository[AlertModel]):
             List of alert templates
         """
         with DatabaseSession(self.database) as session:
-            return session.query(AlertModel).order_by(AlertModel.name).all() 
+            return session.query(AlertModel).order_by(AlertModel.name).all()
+
+
+class StreamHealthRepository:
+    """Repository for managing stream health data."""
+    
+    def __init__(self, database: Database):
+        """Initialize the repository.
+        
+        Args:
+            database: Database instance
+        """
+        self.database = database
+    
+    async def create(self, session_id: str, metrics: Dict[str, Any]) -> str:
+        """Create a new stream health record.
+        
+        Args:
+            session_id: Stream session ID
+            metrics: Stream health metrics
+            
+        Returns:
+            ID of the created record
+        """
+        async with self.database.session() as session:
+            record_id = str(uuid.uuid4())
+            
+            # Create new stream health record
+            health_record = StreamHealthModel(
+                id=record_id,
+                session_id=session_id,
+                timestamp=time.time(),
+                
+                # OBS statistics
+                fps=metrics.get('fps'),
+                render_total_frames=metrics.get('render_total_frames'),
+                render_missed_frames=metrics.get('render_missed_frames'),
+                output_total_frames=metrics.get('output_total_frames'),
+                output_skipped_frames=metrics.get('output_skipped_frames'),
+                average_frame_time=metrics.get('average_frame_time'),
+                cpu_usage=metrics.get('cpu_usage'),
+                memory_usage=metrics.get('memory_usage'),
+                free_disk_space=metrics.get('free_disk_space'),
+                
+                # Stream statistics
+                bitrate=metrics.get('bitrate'),
+                num_dropped_frames=metrics.get('num_dropped_frames'),
+                num_total_frames=metrics.get('num_total_frames'),
+                strain=metrics.get('strain'),
+                stream_duration=metrics.get('stream_duration'),
+                
+                # Network statistics
+                kbits_per_sec=metrics.get('kbits_per_sec'),
+                ping=metrics.get('ping')
+            )
+            
+            session.add(health_record)
+            await session.commit()
+            
+            return record_id
+    
+    async def get_by_session(self, session_id: str, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get stream health records for a session.
+        
+        Args:
+            session_id: Stream session ID
+            limit: Maximum number of records to return
+            
+        Returns:
+            List of stream health records
+        """
+        async with self.database.session() as session:
+            stmt = (
+                select(StreamHealthModel)
+                .where(StreamHealthModel.session_id == session_id)
+                .order_by(StreamHealthModel.timestamp.desc())
+                .limit(limit)
+            )
+            
+            result = await session.execute(stmt)
+            records = result.scalars().all()
+            
+            return [
+                {
+                    'id': record.id,
+                    'session_id': record.session_id,
+                    'timestamp': record.timestamp,
+                    'fps': record.fps,
+                    'render_total_frames': record.render_total_frames,
+                    'render_missed_frames': record.render_missed_frames,
+                    'output_total_frames': record.output_total_frames,
+                    'output_skipped_frames': record.output_skipped_frames,
+                    'average_frame_time': record.average_frame_time,
+                    'cpu_usage': record.cpu_usage,
+                    'memory_usage': record.memory_usage,
+                    'free_disk_space': record.free_disk_space,
+                    'bitrate': record.bitrate,
+                    'num_dropped_frames': record.num_dropped_frames,
+                    'num_total_frames': record.num_total_frames,
+                    'strain': record.strain,
+                    'stream_duration': record.stream_duration,
+                    'kbits_per_sec': record.kbits_per_sec,
+                    'ping': record.ping,
+                    'created_at': record.created_at
+                }
+                for record in records
+            ]
+    
+    async def get_latest_by_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get the latest stream health record for a session.
+        
+        Args:
+            session_id: Stream session ID
+            
+        Returns:
+            Latest stream health record or None if not found
+        """
+        async with self.database.session() as session:
+            stmt = (
+                select(StreamHealthModel)
+                .where(StreamHealthModel.session_id == session_id)
+                .order_by(StreamHealthModel.timestamp.desc())
+                .limit(1)
+            )
+            
+            result = await session.execute(stmt)
+            record = result.scalars().first()
+            
+            if not record:
+                return None
+            
+            return {
+                'id': record.id,
+                'session_id': record.session_id,
+                'timestamp': record.timestamp,
+                'fps': record.fps,
+                'render_total_frames': record.render_total_frames,
+                'render_missed_frames': record.render_missed_frames,
+                'output_total_frames': record.output_total_frames,
+                'output_skipped_frames': record.output_skipped_frames,
+                'average_frame_time': record.average_frame_time,
+                'cpu_usage': record.cpu_usage,
+                'memory_usage': record.memory_usage,
+                'free_disk_space': record.free_disk_space,
+                'bitrate': record.bitrate,
+                'num_dropped_frames': record.num_dropped_frames,
+                'num_total_frames': record.num_total_frames,
+                'strain': record.strain,
+                'stream_duration': record.stream_duration,
+                'kbits_per_sec': record.kbits_per_sec,
+                'ping': record.ping,
+                'created_at': record.created_at
+            } 

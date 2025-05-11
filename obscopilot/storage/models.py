@@ -7,6 +7,7 @@ This module defines the SQLAlchemy ORM models for database storage.
 import datetime
 import json
 import uuid
+import time
 from typing import Dict, List, Optional, Any
 
 from sqlalchemy import Column, Integer, String, Boolean, Float, JSON, DateTime, ForeignKey, Table
@@ -321,6 +322,9 @@ class StreamSessionModel(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
     
+    # Relationships
+    health_metrics = relationship("StreamHealthModel", back_populates="session", cascade="all, delete-orphan")
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert model to dictionary.
         
@@ -344,6 +348,43 @@ class StreamSessionModel(Base):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+
+
+class StreamHealthModel(Base):
+    """Model for storing stream health metrics."""
+    
+    __tablename__ = 'stream_health'
+    
+    id = Column(String, primary_key=True)
+    session_id = Column(String, ForeignKey("stream_sessions.id"), nullable=False)
+    timestamp = Column(Float, nullable=False)
+    
+    # OBS statistics
+    fps = Column(Float)
+    render_total_frames = Column(Integer)
+    render_missed_frames = Column(Integer)
+    output_total_frames = Column(Integer)
+    output_skipped_frames = Column(Integer)
+    average_frame_time = Column(Float)
+    cpu_usage = Column(Float)
+    memory_usage = Column(Float)
+    free_disk_space = Column(Float)
+    
+    # Stream statistics
+    bitrate = Column(Float)
+    num_dropped_frames = Column(Integer)
+    num_total_frames = Column(Integer)
+    strain = Column(Float)
+    stream_duration = Column(Float)
+    
+    # Network statistics
+    kbits_per_sec = Column(Float)
+    ping = Column(Float)
+    
+    created_at = Column(Float, nullable=False, default=lambda: time.time())
+    
+    # Relationships
+    session = relationship("StreamSessionModel", back_populates="health_metrics")
 
 
 class AlertModel(Base):

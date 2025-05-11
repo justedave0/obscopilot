@@ -57,10 +57,15 @@ class EventType(Enum):
     OBS_DISCONNECTED = auto()
     OBS_SCENE_CHANGED = auto()
     OBS_SOURCE_VISIBILITY_CHANGED = auto()
-    OBS_STREAMING_STARTED = auto()
-    OBS_STREAMING_STOPPED = auto()
+    OBS_STREAM_STARTED = auto()
+    OBS_STREAM_STOPPED = auto()
     OBS_RECORDING_STARTED = auto()
     OBS_RECORDING_STOPPED = auto()
+    
+    # Stream health events
+    STREAM_HEALTH_UPDATED = auto()
+    STREAM_HEALTH_WARNING = auto()
+    STREAM_HEALTH_CRITICAL = auto()
     
     # Workflow events
     WORKFLOW_LOADED = auto()

@@ -22,8 +22,7 @@
 - [x] Custom chat commands
 - [x] Viewer statistics tracking
 - [x] Alert system
-- [ ] Scene transitions
-- [ ] Stream health monitoring
+- [x] Stream health monitoring
 
 ## Phase 5: UI/UX Enhancements
 - [ ] Workflow editor
@@ -88,7 +87,7 @@ This document outlines the tasks for developing OBSCopilot, a cross-platform Pyt
 - [ ] Add error handling for OBS connection issues
 - [ ] Implement automatic reconnection
 
-## 5. OpenAI Integration
+## 5.a OpenAI Integration
 
 - [ ] Add OpenAI API client
 - [ ] Create system prompt management interface
@@ -97,6 +96,13 @@ This document outlines the tasks for developing OBSCopilot, a cross-platform Pyt
 - [ ] Create templating system for AI responses (including user info)
 - [ ] Implement rate limiting and token usage tracking
 - [ ] Add error handling for API failures
+
+## 5.b Google AI Integration
+
+- [ ] Add Google AI API client
+- [ ] Implement AI response generation for chat
+- [ ] Add context tracking for conversations
+- [ ] Create templating system for AI responses (including user info) 
 
 ## 6. User Interface
 
