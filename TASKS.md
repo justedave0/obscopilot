@@ -148,6 +148,19 @@ This document outlines the tasks for developing OBSCopilot, a cross-platform Pyt
 - [x] Create release pipeline
 - [x] Prepare for distribution
 
+## 11. Quality of Life Improvements
+
+- [ ] Implement automatic reconnection to services (OBS, Twitch, etc.) on application startup
+- [ ] Consolidate connection settings in a single tab
+- [ ] Improve connection status indicators
+- [ ] Add connection recovery mechanisms
+- [ ] Add connection logs and diagnostics
+- [ ] Implement secure credential handling for API keys:
+  - [ ] Remove credentials fields from UI for end users
+  - [ ] Securely embed application credentials during build process
+  - [ ] Implement obfuscation or encryption for embedded credentials
+  - [ ] Add documentation for developers on securely configuring API keys
+
 ## Technology Choices
 
 - **Python Version**: 3.9+
