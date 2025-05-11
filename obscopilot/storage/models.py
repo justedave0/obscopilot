@@ -220,4 +220,127 @@ class TwitchAuthModel(Base):
             'expires_at': self.expires_at.isoformat() if self.expires_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class ViewerModel(Base):
+    """Database model for storing Twitch viewer statistics."""
+    
+    __tablename__ = 'viewers'
+    
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(100), unique=True, nullable=False)
+    username = Column(String(100), nullable=False)
+    display_name = Column(String(100), nullable=True)
+    
+    # Profile data
+    profile_image_url = Column(String(255), nullable=True)
+    is_broadcaster = Column(Boolean, default=False, nullable=False)
+    is_moderator = Column(Boolean, default=False, nullable=False)
+    is_vip = Column(Boolean, default=False, nullable=False)
+    is_subscriber = Column(Boolean, default=False, nullable=False)
+    is_follower = Column(Boolean, default=False, nullable=False)
+    
+    # Engagement stats
+    first_seen_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    last_seen_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    message_count = Column(Integer, default=0, nullable=False)
+    bits_donated = Column(Integer, default=0, nullable=False)
+    
+    # Stream presence
+    watch_time = Column(Integer, default=0, nullable=False)  # In seconds
+    streams_watched = Column(Integer, default=0, nullable=False)
+    last_active_stream_id = Column(String(100), nullable=True)
+    
+    # Chat stats
+    last_chat_at = Column(DateTime, nullable=True)
+    first_chat_at = Column(DateTime, nullable=True)
+    
+    # Custom notes
+    notes = Column(String(1000), nullable=True)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert model to dictionary.
+        
+        Returns:
+            Dictionary representation of the model
+        """
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'username': self.username,
+            'display_name': self.display_name,
+            'profile_image_url': self.profile_image_url,
+            'is_broadcaster': self.is_broadcaster,
+            'is_moderator': self.is_moderator,
+            'is_vip': self.is_vip,
+            'is_subscriber': self.is_subscriber,
+            'is_follower': self.is_follower,
+            'first_seen_at': self.first_seen_at.isoformat() if self.first_seen_at else None,
+            'last_seen_at': self.last_seen_at.isoformat() if self.last_seen_at else None,
+            'message_count': self.message_count,
+            'bits_donated': self.bits_donated,
+            'watch_time': self.watch_time,
+            'streams_watched': self.streams_watched,
+            'last_active_stream_id': self.last_active_stream_id,
+            'last_chat_at': self.last_chat_at.isoformat() if self.last_chat_at else None,
+            'first_chat_at': self.first_chat_at.isoformat() if self.first_chat_at else None,
+            'notes': self.notes,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class StreamSessionModel(Base):
+    """Database model for storing stream session data."""
+    
+    __tablename__ = 'stream_sessions'
+    
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    stream_id = Column(String(100), nullable=True)  # Twitch stream ID, if available
+    title = Column(String(255), nullable=True)
+    game_name = Column(String(255), nullable=True)
+    
+    started_at = Column(DateTime, nullable=False)
+    ended_at = Column(DateTime, nullable=True)
+    duration = Column(Integer, nullable=True)  # In seconds
+    
+    # Stats
+    peak_viewers = Column(Integer, default=0, nullable=False)
+    unique_viewers = Column(Integer, default=0, nullable=False)
+    new_followers = Column(Integer, default=0, nullable=False)
+    new_subscribers = Column(Integer, default=0, nullable=False)
+    bits_received = Column(Integer, default=0, nullable=False)
+    messages_count = Column(Integer, default=0, nullable=False)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert model to dictionary.
+        
+        Returns:
+            Dictionary representation of the model
+        """
+        return {
+            'id': self.id,
+            'stream_id': self.stream_id,
+            'title': self.title,
+            'game_name': self.game_name,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'ended_at': self.ended_at.isoformat() if self.ended_at else None,
+            'duration': self.duration,
+            'peak_viewers': self.peak_viewers,
+            'unique_viewers': self.unique_viewers,
+            'new_followers': self.new_followers,
+            'new_subscribers': self.new_subscribers,
+            'bits_received': self.bits_received,
+            'messages_count': self.messages_count,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         } 

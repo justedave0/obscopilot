@@ -5,6 +5,7 @@ from obscopilot.ui.ai_tab import AITab
 from obscopilot.ui.workflows_tab import WorkflowsTab
 from obscopilot.ui.settings_tab import SettingsTab
 from obscopilot.ui.commands_tab import CommandsTab
+from obscopilot.ui.viewer_stats_tab import ViewerStatsTab
 from obscopilot.ui.about_dialog import AboutDialog
 
 class MainWindow(QMainWindow):
@@ -28,6 +29,7 @@ class MainWindow(QMainWindow):
         self.ai_tab = AITab(self)
         self.workflows_tab = WorkflowsTab(self)
         self.commands_tab = CommandsTab(self)
+        self.viewer_stats_tab = ViewerStatsTab(self, self.database)
         self.settings_tab = SettingsTab(self)
         
         # Add tabs to tab widget
@@ -37,6 +39,7 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.ai_tab, "AI")
         self.tabs.addTab(self.workflows_tab, "Workflows")
         self.tabs.addTab(self.commands_tab, "Commands")
+        self.tabs.addTab(self.viewer_stats_tab, "Viewer Stats")
         self.tabs.addTab(self.settings_tab, "Settings")
         
         # Add tab widget to main layout

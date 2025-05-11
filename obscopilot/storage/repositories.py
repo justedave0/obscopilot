@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from obscopilot.storage.database import Database, DatabaseSession
 from obscopilot.storage.models import (
     WorkflowModel, TriggerModel, ActionModel, 
-    WorkflowExecutionModel, SettingModel, TwitchAuthModel
+    WorkflowExecutionModel, SettingModel, TwitchAuthModel, ViewerModel, StreamSessionModel
 )
 
 logger = logging.getLogger(__name__)
@@ -404,34 +404,393 @@ class TwitchAuthRepository(Repository[TwitchAuthModel]):
         Returns:
             Created or updated auth model
         """
+        # Calculate expires_at if expires_in is provided
+        expires_at = None
+        if expires_in:
+            expires_at = datetime.datetime.utcnow() + datetime.timedelta(seconds=expires_in)
+        
         with DatabaseSession(self.database) as session:
+            # Check if auth data already exists for this user
             auth = session.query(TwitchAuthModel).filter_by(user_id=user_id).first()
             
-            # Calculate expiration time if provided
-            expires_at = None
-            if expires_in:
-                expires_at = datetime.datetime.utcnow() + datetime.timedelta(seconds=expires_in)
-            
-            if not auth:
-                # Create new auth record
+            if auth:
+                # Update existing auth data
+                auth.username = username
+                auth.access_token = access_token
+                auth.refresh_token = refresh_token
+                auth.scope = scope
+                if expires_at:
+                    auth.expires_at = expires_at
+            else:
+                # Create new auth data
                 auth = TwitchAuthModel(
                     user_id=user_id,
                     username=username,
                     access_token=access_token,
                     refresh_token=refresh_token,
                     scope=scope,
-                    token_type='bearer',
                     expires_at=expires_at
                 )
                 session.add(auth)
-            else:
-                # Update existing auth record
-                auth.username = username
-                auth.access_token = access_token
-                auth.refresh_token = refresh_token
-                auth.scope = scope
-                auth.expires_at = expires_at
-                auth.updated_at = datetime.datetime.utcnow()
             
             session.flush()
-            return auth 
+            return auth
+    
+    def delete_by_user_id(self, user_id: str) -> bool:
+        """Delete auth data by user ID.
+        
+        Args:
+            user_id: Twitch user ID
+            
+        Returns:
+            True if auth data was deleted, False otherwise
+        """
+        with DatabaseSession(self.database) as session:
+            auth = session.query(TwitchAuthModel).filter_by(user_id=user_id).first()
+            if auth:
+                session.delete(auth)
+                return True
+            return False
+
+
+class ViewerRepository(Repository[ViewerModel]):
+    """Repository for Twitch viewer data."""
+    
+    def __init__(self, database: Database):
+        """Initialize viewer repository.
+        
+        Args:
+            database: Database instance
+        """
+        super().__init__(database, ViewerModel)
+    
+    def get_by_user_id(self, user_id: str) -> Optional[ViewerModel]:
+        """Get viewer by Twitch user ID.
+        
+        Args:
+            user_id: Twitch user ID
+            
+        Returns:
+            Viewer if found, None otherwise
+        """
+        with DatabaseSession(self.database) as session:
+            return session.query(ViewerModel).filter_by(user_id=user_id).first()
+    
+    def get_by_username(self, username: str) -> Optional[ViewerModel]:
+        """Get viewer by username.
+        
+        Args:
+            username: Twitch username
+            
+        Returns:
+            Viewer if found, None otherwise
+        """
+        with DatabaseSession(self.database) as session:
+            return session.query(ViewerModel).filter_by(username=username.lower()).first()
+    
+    def update_or_create(
+        self, 
+        user_id: str, 
+        username: str, 
+        data: Dict[str, Any] = None
+    ) -> ViewerModel:
+        """Update or create a viewer.
+        
+        Args:
+            user_id: Twitch user ID
+            username: Twitch username
+            data: Additional viewer data
+            
+        Returns:
+            Updated or created viewer
+        """
+        data = data or {}
+        
+        with DatabaseSession(self.database) as session:
+            viewer = session.query(ViewerModel).filter_by(user_id=user_id).first()
+            
+            if viewer:
+                # Update existing viewer
+                viewer.username = username.lower()
+                
+                # Update other fields if provided
+                for key, value in data.items():
+                    if hasattr(viewer, key):
+                        setattr(viewer, key, value)
+                
+                # Always update last_seen_at
+                viewer.last_seen_at = datetime.datetime.utcnow()
+            else:
+                # Create new viewer
+                viewer_data = {
+                    'user_id': user_id,
+                    'username': username.lower(),
+                    'first_seen_at': datetime.datetime.utcnow(),
+                    'last_seen_at': datetime.datetime.utcnow()
+                }
+                viewer_data.update(data)
+                
+                viewer = ViewerModel(**viewer_data)
+                session.add(viewer)
+            
+            session.flush()
+            return viewer
+    
+    def increment_message_count(self, user_id: str) -> Optional[ViewerModel]:
+        """Increment message count for a viewer.
+        
+        Args:
+            user_id: Twitch user ID
+            
+        Returns:
+            Updated viewer or None if not found
+        """
+        with DatabaseSession(self.database) as session:
+            viewer = session.query(ViewerModel).filter_by(user_id=user_id).first()
+            if viewer:
+                viewer.message_count += 1
+                viewer.last_chat_at = datetime.datetime.utcnow()
+                if not viewer.first_chat_at:
+                    viewer.first_chat_at = datetime.datetime.utcnow()
+                session.flush()
+                return viewer
+            return None
+    
+    def add_bits_donated(self, user_id: str, bits: int) -> Optional[ViewerModel]:
+        """Add bits donated by a viewer.
+        
+        Args:
+            user_id: Twitch user ID
+            bits: Number of bits donated
+            
+        Returns:
+            Updated viewer or None if not found
+        """
+        with DatabaseSession(self.database) as session:
+            viewer = session.query(ViewerModel).filter_by(user_id=user_id).first()
+            if viewer:
+                viewer.bits_donated += bits
+                session.flush()
+                return viewer
+            return None
+    
+    def update_watch_time(self, user_id: str, seconds: int) -> Optional[ViewerModel]:
+        """Update watch time for a viewer.
+        
+        Args:
+            user_id: Twitch user ID
+            seconds: Seconds to add to watch time
+            
+        Returns:
+            Updated viewer or None if not found
+        """
+        with DatabaseSession(self.database) as session:
+            viewer = session.query(ViewerModel).filter_by(user_id=user_id).first()
+            if viewer:
+                viewer.watch_time += seconds
+                session.flush()
+                return viewer
+            return None
+    
+    def increment_streams_watched(self, user_id: str, stream_id: str) -> Optional[ViewerModel]:
+        """Increment streams watched count for a viewer.
+        
+        Args:
+            user_id: Twitch user ID
+            stream_id: Current stream ID
+            
+        Returns:
+            Updated viewer or None if not found
+        """
+        with DatabaseSession(self.database) as session:
+            viewer = session.query(ViewerModel).filter_by(user_id=user_id).first()
+            if viewer:
+                # Only increment if this is a new stream
+                if viewer.last_active_stream_id != stream_id:
+                    viewer.streams_watched += 1
+                    viewer.last_active_stream_id = stream_id
+                session.flush()
+                return viewer
+            return None
+    
+    def get_top_chatters(self, limit: int = 10) -> List[ViewerModel]:
+        """Get top chatters by message count.
+        
+        Args:
+            limit: Maximum number of viewers to return
+            
+        Returns:
+            List of top chatters
+        """
+        with DatabaseSession(self.database) as session:
+            return session.query(ViewerModel) \
+                .filter(ViewerModel.message_count > 0) \
+                .order_by(ViewerModel.message_count.desc()) \
+                .limit(limit) \
+                .all()
+    
+    def get_top_donors(self, limit: int = 10) -> List[ViewerModel]:
+        """Get top donors by bits donated.
+        
+        Args:
+            limit: Maximum number of viewers to return
+            
+        Returns:
+            List of top donors
+        """
+        with DatabaseSession(self.database) as session:
+            return session.query(ViewerModel) \
+                .filter(ViewerModel.bits_donated > 0) \
+                .order_by(ViewerModel.bits_donated.desc()) \
+                .limit(limit) \
+                .all()
+    
+    def get_most_loyal_viewers(self, limit: int = 10) -> List[ViewerModel]:
+        """Get most loyal viewers by watch time.
+        
+        Args:
+            limit: Maximum number of viewers to return
+            
+        Returns:
+            List of most loyal viewers
+        """
+        with DatabaseSession(self.database) as session:
+            return session.query(ViewerModel) \
+                .filter(ViewerModel.watch_time > 0) \
+                .order_by(ViewerModel.watch_time.desc()) \
+                .limit(limit) \
+                .all()
+
+
+class StreamSessionRepository(Repository[StreamSessionModel]):
+    """Repository for stream session data."""
+    
+    def __init__(self, database: Database):
+        """Initialize stream session repository.
+        
+        Args:
+            database: Database instance
+        """
+        super().__init__(database, StreamSessionModel)
+    
+    def get_by_stream_id(self, stream_id: str) -> Optional[StreamSessionModel]:
+        """Get stream session by Twitch stream ID.
+        
+        Args:
+            stream_id: Twitch stream ID
+            
+        Returns:
+            Stream session if found, None otherwise
+        """
+        with DatabaseSession(self.database) as session:
+            return session.query(StreamSessionModel).filter_by(stream_id=stream_id).first()
+    
+    def get_current_session(self) -> Optional[StreamSessionModel]:
+        """Get current active stream session.
+        
+        Returns:
+            Current stream session if found, None otherwise
+        """
+        with DatabaseSession(self.database) as session:
+            return session.query(StreamSessionModel) \
+                .filter(StreamSessionModel.ended_at.is_(None)) \
+                .order_by(StreamSessionModel.started_at.desc()) \
+                .first()
+    
+    def start_session(self, stream_data: Dict[str, Any] = None) -> StreamSessionModel:
+        """Start a new stream session.
+        
+        Args:
+            stream_data: Stream data from Twitch API
+            
+        Returns:
+            Created stream session
+        """
+        stream_data = stream_data or {}
+        
+        # Extract data from stream info
+        session_data = {
+            'started_at': datetime.datetime.utcnow(),
+            'stream_id': stream_data.get('id'),
+            'title': stream_data.get('title'),
+            'game_name': stream_data.get('game_name')
+        }
+        
+        session = StreamSessionModel(**session_data)
+        
+        with DatabaseSession(self.database) as session:
+            session.add(session)
+            session.flush()
+            return session
+    
+    def end_session(self, session_id: str, stream_data: Dict[str, Any] = None) -> Optional[StreamSessionModel]:
+        """End a stream session.
+        
+        Args:
+            session_id: Stream session ID
+            stream_data: Final stream data
+            
+        Returns:
+            Updated stream session or None if not found
+        """
+        with DatabaseSession(self.database) as session:
+            stream_session = session.query(StreamSessionModel).filter_by(id=session_id).first()
+            if not stream_session:
+                return None
+            
+            # Set end time
+            stream_session.ended_at = datetime.datetime.utcnow()
+            
+            # Calculate duration
+            if stream_session.started_at:
+                duration = (stream_session.ended_at - stream_session.started_at).total_seconds()
+                stream_session.duration = int(duration)
+            
+            # Update with final stream data if provided
+            if stream_data:
+                if 'title' in stream_data:
+                    stream_session.title = stream_data['title']
+                if 'game_name' in stream_data:
+                    stream_session.game_name = stream_data['game_name']
+            
+            session.flush()
+            return stream_session
+    
+    def update_session_stats(self, session_id: str, stats: Dict[str, Any]) -> Optional[StreamSessionModel]:
+        """Update stream session statistics.
+        
+        Args:
+            session_id: Stream session ID
+            stats: Statistics to update
+            
+        Returns:
+            Updated stream session or None if not found
+        """
+        with DatabaseSession(self.database) as session:
+            stream_session = session.query(StreamSessionModel).filter_by(id=session_id).first()
+            if not stream_session:
+                return None
+            
+            # Update stats
+            for key, value in stats.items():
+                if hasattr(stream_session, key):
+                    setattr(stream_session, key, value)
+            
+            session.flush()
+            return stream_session
+    
+    def get_recent_sessions(self, limit: int = 10) -> List[StreamSessionModel]:
+        """Get recent stream sessions.
+        
+        Args:
+            limit: Maximum number of sessions to return
+            
+        Returns:
+            List of recent stream sessions
+        """
+        with DatabaseSession(self.database) as session:
+            return session.query(StreamSessionModel) \
+                .filter(StreamSessionModel.ended_at.isnot(None)) \
+                .order_by(StreamSessionModel.started_at.desc()) \
+                .limit(limit) \
+                .all() 
