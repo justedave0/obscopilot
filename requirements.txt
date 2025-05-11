@@ -1,3 +1,0 @@
-twitchio>=2.6.0
-obsws-python>=1.4.0
-requests>=2.28.0 
