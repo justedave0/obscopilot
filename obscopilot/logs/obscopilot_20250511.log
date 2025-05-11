@@ -79,3 +79,32 @@
 2025-05-11 18:59:15,096 - obscopilot - DEBUG - simple.py:1418 - Publishing event: EventType.OBS_CONNECTED
 2025-05-11 18:59:15,096 - obscopilot - WARNING - simple.py:1429 - Event bus has emit method which is a coroutine - directly updating UI instead
 2025-05-11 18:59:15,096 - obscopilot - INFO - simple.py:1090 - Successfully connected to OBS
+2025-05-11 19:31:50,471 - obscopilot - INFO - simple.py:81 - Logging initialized, log file: c:\dev\obscopilot\obscopilot\logs\obscopilot_20250511.log
+2025-05-11 19:31:50,472 - obscopilot - INFO - simple.py:82 - Application version: 0.1.0
+2025-05-11 19:31:50,472 - obscopilot - INFO - simple.py:83 - Python version: 3.13.3 (tags/v3.13.3:6280bb5, Apr  8 2025, 14:47:33) [MSC v.1943 64 bit (AMD64)]
+2025-05-11 19:31:50,490 - obscopilot - INFO - simple.py:219 - Initializing SimpleMainWindow
+2025-05-11 19:31:50,490 - obscopilot.core.config - INFO - config.py:108 - Loading configuration from C:\Users\drspl\.obscopilot\config.toml
+2025-05-11 19:31:50,498 - obscopilot - DEBUG - simple.py:402 - Loading credentials from .env file: C:\dev\obscopilot\.env
+2025-05-11 19:31:50,498 - obscopilot - DEBUG - simple.py:411 - Successfully loaded credentials from .env file
+2025-05-11 19:31:50,498 - obscopilot.core.config - INFO - config.py:126 - Saving configuration to C:\Users\drspl\.obscopilot\config.toml
+2025-05-11 19:31:50,499 - obscopilot - INFO - simple.py:442 - Set default Twitch application credentials
+2025-05-11 19:31:50,520 - obscopilot.core.events - DEBUG - events.py:177 - Subscribed to EventType.TWITCH_CONNECTED
+2025-05-11 19:31:50,520 - obscopilot.core.events - DEBUG - events.py:177 - Subscribed to EventType.TWITCH_DISCONNECTED
+2025-05-11 19:31:50,520 - obscopilot.core.events - DEBUG - events.py:177 - Subscribed to EventType.OBS_CONNECTED
+2025-05-11 19:31:50,520 - obscopilot.core.events - DEBUG - events.py:177 - Subscribed to EventType.OBS_DISCONNECTED
+2025-05-11 19:31:50,520 - obscopilot.core.events - DEBUG - events.py:177 - Subscribed to EventType.WORKFLOW_LOADED
+2025-05-11 19:31:50,520 - obscopilot - INFO - simple.py:1463 - Attempting to auto-connect to services
+2025-05-11 19:31:50,520 - obscopilot - INFO - simple.py:1027 - Attempting to connect to OBS
+2025-05-11 19:31:50,520 - obscopilot.core.config - INFO - config.py:126 - Saving configuration to C:\Users\drspl\.obscopilot\config.toml
+2025-05-11 19:31:50,521 - obscopilot - DEBUG - simple.py:1051 - Connecting to OBS at localhost:4455
+2025-05-11 19:31:51,024 - obscopilot - DEBUG - simple.py:1439 - Publishing event: EventType.OBS_CONNECTED
+2025-05-11 19:31:51,024 - obscopilot - WARNING - simple.py:1450 - Event bus has emit method which is a coroutine - directly updating UI instead
+2025-05-11 19:31:51,025 - obscopilot - INFO - simple.py:1082 - Successfully connected to OBS
+2025-05-11 19:31:52,542 - obscopilot - INFO - simple.py:1475 - Auto-authenticating with Twitch
+2025-05-11 19:31:52,542 - obscopilot - INFO - simple.py:1493 - Starting Twitch authentication
+2025-05-11 19:31:52,542 - obscopilot - DEBUG - simple.py:1519 - Would start OAuth flow here in a real implementation
+2025-05-11 19:31:53,043 - obscopilot.core.config - INFO - config.py:126 - Saving configuration to C:\Users\drspl\.obscopilot\config.toml
+2025-05-11 19:31:53,043 - obscopilot - INFO - simple.py:1527 - Simulated successful authentication
+2025-05-11 19:31:53,044 - obscopilot - DEBUG - simple.py:1439 - Publishing event: EventType.TWITCH_CONNECTED
+2025-05-11 19:31:53,044 - obscopilot - WARNING - simple.py:1450 - Event bus has emit method which is a coroutine - directly updating UI instead
+2025-05-11 19:31:54,688 - obscopilot - INFO - simple.py:1483 - Auto-connection completed
