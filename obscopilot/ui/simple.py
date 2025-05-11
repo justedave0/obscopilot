@@ -16,6 +16,189 @@ from PyQt6.QtWidgets import (
 from obscopilot.core.config import Config
 from obscopilot.core.events import event_bus, Event, EventType
 
+# Add TwitchSettingsPanel class
+class TwitchSettingsPanel(QWidget):
+    """Twitch settings panel for authentication and API configuration."""
+    
+    def __init__(self, config, twitch_client):
+        """Initialize the Twitch settings panel.
+        
+        Args:
+            config: Application configuration
+            twitch_client: Twitch client instance
+        """
+        super().__init__()
+        self.config = config
+        self.twitch_client = twitch_client
+        
+        # Create layout
+        main_layout = QVBoxLayout(self)
+        
+        # API credentials group
+        credentials_group = QGroupBox("Twitch API Credentials")
+        credentials_layout = QFormLayout(credentials_group)
+        
+        # Broadcaster client ID
+        self.broadcaster_client_id = QLineEdit()
+        self.broadcaster_client_id.setText(self.config.get('twitch', 'broadcaster_client_id', ''))
+        self.broadcaster_client_id.setPlaceholderText("Enter your broadcaster client ID")
+        credentials_layout.addRow("Broadcaster Client ID:", self.broadcaster_client_id)
+        
+        # Broadcaster client secret
+        self.broadcaster_client_secret = QLineEdit()
+        self.broadcaster_client_secret.setText(self.config.get('twitch', 'broadcaster_client_secret', ''))
+        self.broadcaster_client_secret.setPlaceholderText("Enter your broadcaster client secret")
+        self.broadcaster_client_secret.setEchoMode(QLineEdit.EchoMode.Password)
+        credentials_layout.addRow("Broadcaster Client Secret:", self.broadcaster_client_secret)
+        
+        # Bot client ID
+        self.bot_client_id = QLineEdit()
+        self.bot_client_id.setText(self.config.get('twitch', 'bot_client_id', ''))
+        self.bot_client_id.setPlaceholderText("Enter your bot client ID (optional)")
+        credentials_layout.addRow("Bot Client ID:", self.bot_client_id)
+        
+        # Bot client secret
+        self.bot_client_secret = QLineEdit()
+        self.bot_client_secret.setText(self.config.get('twitch', 'bot_client_secret', ''))
+        self.bot_client_secret.setPlaceholderText("Enter your bot client secret (optional)")
+        self.bot_client_secret.setEchoMode(QLineEdit.EchoMode.Password)
+        credentials_layout.addRow("Bot Client Secret:", self.bot_client_secret)
+        
+        # Hint label
+        hint_label = QLabel(
+            "You need to register an application on the Twitch Developer Console "
+            "to get these credentials. The redirect URI should be set to: "
+            "http://localhost:8000/auth/callback"
+        )
+        hint_label.setWordWrap(True)
+        hint_label.setStyleSheet("color: #888888; font-style: italic;")
+        credentials_layout.addRow("", hint_label)
+        
+        # Save credentials button
+        save_credentials_button = QPushButton("Save Credentials")
+        save_credentials_button.clicked.connect(self._save_credentials)
+        credentials_layout.addRow("", save_credentials_button)
+        
+        main_layout.addWidget(credentials_group)
+        
+        # Authentication group
+        auth_group = QGroupBox("Twitch Authentication")
+        auth_layout = QVBoxLayout(auth_group)
+        
+        # Broadcaster authentication
+        broadcaster_auth_layout = QHBoxLayout()
+        self.broadcaster_status_label = QLabel("Not authenticated")
+        broadcaster_auth_button = QPushButton("Authenticate Broadcaster")
+        broadcaster_auth_button.clicked.connect(self._authenticate_broadcaster)
+        broadcaster_revoke_button = QPushButton("Revoke")
+        broadcaster_revoke_button.clicked.connect(self._revoke_broadcaster_auth)
+        broadcaster_auth_layout.addWidget(self.broadcaster_status_label)
+        broadcaster_auth_layout.addWidget(broadcaster_auth_button)
+        broadcaster_auth_layout.addWidget(broadcaster_revoke_button)
+        
+        # Bot authentication
+        bot_auth_layout = QHBoxLayout()
+        self.bot_status_label = QLabel("Not authenticated")
+        bot_auth_button = QPushButton("Authenticate Bot")
+        bot_auth_button.clicked.connect(self._authenticate_bot)
+        bot_revoke_button = QPushButton("Revoke")
+        bot_revoke_button.clicked.connect(self._revoke_bot_auth)
+        bot_auth_layout.addWidget(self.bot_status_label)
+        bot_auth_layout.addWidget(bot_auth_button)
+        bot_auth_layout.addWidget(bot_revoke_button)
+        
+        # Add layouts to auth group
+        auth_layout.addWidget(QLabel("Broadcaster Account:"))
+        auth_layout.addLayout(broadcaster_auth_layout)
+        auth_layout.addWidget(QLabel("Bot Account:"))
+        auth_layout.addLayout(bot_auth_layout)
+        
+        main_layout.addWidget(auth_group)
+        
+        # Add stretcher
+        main_layout.addStretch()
+        
+        # Subscribe to events
+        event_bus.subscribe(EventType.TWITCH_AUTH_UPDATED, self._on_auth_updated)
+        event_bus.subscribe(EventType.TWITCH_AUTH_REVOKED, self._on_auth_revoked)
+        
+        # Update status labels
+        self._update_status_labels()
+    
+    def _save_credentials(self):
+        """Save Twitch API credentials to config."""
+        # Save to config
+        self.config.set('twitch', 'broadcaster_client_id', self.broadcaster_client_id.text())
+        self.config.set('twitch', 'broadcaster_client_secret', self.broadcaster_client_secret.text())
+        self.config.set('twitch', 'bot_client_id', self.bot_client_id.text())
+        self.config.set('twitch', 'bot_client_secret', self.bot_client_secret.text())
+        self.config.save()
+        
+        # Show success message
+        QMessageBox.information(self, "Saved", "Twitch API credentials saved successfully.")
+    
+    def _authenticate_broadcaster(self):
+        """Start the broadcaster authentication flow."""
+        # Check if credentials are set
+        if not self.broadcaster_client_id.text() or not self.broadcaster_client_secret.text():
+            QMessageBox.warning(self, "Missing Credentials", 
+                               "Please enter your broadcaster client ID and secret first.")
+            return
+        
+        # Start authentication flow
+        asyncio.create_task(self.twitch_client.authenticate_broadcaster())
+    
+    def _authenticate_bot(self):
+        """Start the bot authentication flow."""
+        # Check if credentials are set
+        if not self.bot_client_id.text() or not self.bot_client_secret.text():
+            QMessageBox.warning(self, "Missing Credentials", 
+                               "Please enter your bot client ID and secret first.")
+            return
+        
+        # Start authentication flow
+        asyncio.create_task(self.twitch_client.authenticate_bot())
+    
+    def _revoke_broadcaster_auth(self):
+        """Revoke broadcaster authentication."""
+        asyncio.create_task(self.twitch_client.revoke_broadcaster_auth())
+    
+    def _revoke_bot_auth(self):
+        """Revoke bot authentication."""
+        asyncio.create_task(self.twitch_client.revoke_bot_auth())
+    
+    def _update_status_labels(self):
+        """Update authentication status labels."""
+        # Broadcaster status
+        broadcaster_id = self.config.get('twitch', 'broadcaster_id')
+        broadcaster_username = self.config.get('twitch', 'broadcaster_username')
+        
+        if broadcaster_id and broadcaster_username:
+            self.broadcaster_status_label.setText(f"Authenticated as {broadcaster_username}")
+            self.broadcaster_status_label.setStyleSheet("color: #4CAF50;")  # Green
+        else:
+            self.broadcaster_status_label.setText("Not authenticated")
+            self.broadcaster_status_label.setStyleSheet("color: #F44336;")  # Red
+        
+        # Bot status
+        bot_id = self.config.get('twitch', 'bot_id')
+        bot_username = self.config.get('twitch', 'bot_username')
+        
+        if bot_id and bot_username:
+            self.bot_status_label.setText(f"Authenticated as {bot_username}")
+            self.bot_status_label.setStyleSheet("color: #4CAF50;")  # Green
+        else:
+            self.bot_status_label.setText("Not authenticated")
+            self.bot_status_label.setStyleSheet("color: #F44336;")  # Red
+    
+    def _on_auth_updated(self, event: Event):
+        """Handle auth updated event."""
+        self._update_status_labels()
+    
+    def _on_auth_revoked(self, event: Event):
+        """Handle auth revoked event."""
+        self._update_status_labels()
+
 class SimpleMainWindow(QMainWindow):
     """Simple main window for OBSCopilot."""
     

@@ -6,27 +6,29 @@
 - [x] Event bus implementation
 - [x] Basic GUI layout
 
-## Phase 2: Integrations
-- [ ] Twitch authentication and event handling
-- [ ] OBS WebSocket connection and control
-- [ ] OpenAI integration
+## Phase 2: Service Integration
+- [x] Twitch authentication and event handling
+- [ ] OBS WebSocket integration
+- [ ] OpenAI API integration
 
-## Phase 3: Workflow System
-- [ ] Data models for triggers, conditions, actions
-- [ ] Workflow engine implementation
-- [ ] UI for workflow creation and management
+## Phase 3: Workflow Engine
+- [ ] Workflow model implementation
+- [ ] Trigger system
+- [ ] Action system
+- [ ] Workflow persistence
 
 ## Phase 4: Advanced Features
-- [ ] Workflow templates
-- [ ] Custom scripting support
-- [ ] Dashboard with analytics
-- [ ] Theme customization
+- [ ] Custom chat commands
+- [ ] Viewer statistics tracking
+- [ ] Alert system
+- [ ] Scene transitions
+- [ ] Stream health monitoring
 
-## Phase 5: Testing & Deployment
-- [ ] Automated tests
-- [ ] Error handling and logging
-- [ ] Installer/packager for different platforms
-- [ ] Documentation for users
+## Phase 5: UI/UX Enhancements
+- [ ] Workflow editor
+- [ ] Dashboard customization
+- [ ] Theming and styling
+- [ ] Keyboard shortcuts
 
 # OBSCopilot: Twitch Live Assistant
 
