@@ -1,7 +1,7 @@
 """
 OBS WebSocket client for OBSCopilot.
 
-This module provides integration with OBS Studio via the WebSocket protocol.
+This module provides integration with OBS Studio via the WebSocket protocol v5 (OBS 28+).
 """
 
 import asyncio
@@ -9,8 +9,7 @@ import logging
 import time
 from typing import Any, Callable, Dict, List, Optional, Union
 
-from obswebsocket import obsws, requests, events
-from obswebsocket.exceptions import ConnectionFailure
+import simpleobsws
 
 from obscopilot.core.config import Config
 from obscopilot.core.events import Event, EventType, event_bus
@@ -29,27 +28,10 @@ class OBSClient:
         """
         self.config = config
         self.event_bus = event_bus
-        self.client: Optional[obsws] = None
+        self.client: Optional[simpleobsws.WebSocketClient] = None
         self.connected = False
-        self.event_handlers = {}
-        self._setup_event_handlers()
-    
-    def _setup_event_handlers(self) -> None:
-        """Set up event handlers for OBS WebSocket events."""
-        # Scene events
-        self.event_handlers[events.SwitchScenes] = self._on_scene_changed
-        self.event_handlers[events.TransitionBegin] = self._on_transition_begin
-        
-        # Streaming events
-        self.event_handlers[events.StreamStarted] = self._on_stream_started
-        self.event_handlers[events.StreamStopped] = self._on_stream_stopped
-        
-        # Recording events
-        self.event_handlers[events.RecordingStarted] = self._on_recording_started
-        self.event_handlers[events.RecordingStopped] = self._on_recording_stopped
-        
-        # Source events
-        self.event_handlers[events.SourceVisibilityChanged] = self._on_source_visibility_changed
+        self._connecting = False
+        self._event_task = None
     
     async def connect(self) -> bool:
         """Connect to OBS WebSocket.
@@ -57,6 +39,16 @@ class OBSClient:
         Returns:
             True if connection was successful, False otherwise
         """
+        if self._connecting:
+            logger.warning("Connection attempt already in progress")
+            return False
+            
+        if self.connected:
+            logger.warning("Already connected to OBS")
+            return True
+            
+        self._connecting = True
+        
         try:
             logger.info("Connecting to OBS WebSocket...")
             
@@ -65,85 +57,169 @@ class OBSClient:
             port = self.config.get('obs', 'port', 4455)
             password = self.config.get('obs', 'password', '')
             
-            # Create client instance
-            self.client = obsws(host, port, password)
+            # Create connection parameters
+            parameters = simpleobsws.IdentificationParameters(ignoreNonFatalRequestStatus=False)
             
-            # Register event handlers
-            for event_type, handler in self.event_handlers.items():
-                self.client.register(event_type, handler)
+            # Create client instance
+            self.client = simpleobsws.WebSocketClient(
+                url=f"ws://{host}:{port}",
+                password=password,
+                identification_parameters=parameters
+            )
             
             # Connect to OBS
-            self.client.connect()
+            await self.client.connect()
+            await self.client.wait_until_identified()
             
             # Get OBS version
-            version = self.client.call(requests.GetVersion())
-            logger.info(f"Connected to OBS {version.getObsVersion()} with WebSocket {version.getObsWebSocketVersion()}")
+            request = simpleobsws.Request('GetVersion')
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                raise ConnectionError(f"Failed to get OBS version: {response.error()}")
+                
+            data = response.responseData
+            obs_version = data.get('obsVersion', 'Unknown')
+            websocket_version = data.get('obsWebSocketVersion', 'Unknown')
+            
+            logger.info(f"Connected to OBS {obs_version} with WebSocket {websocket_version}")
+            
+            # Start event listener
+            self._event_task = asyncio.create_task(self._event_listener())
             
             self.connected = True
             await event_bus.emit(Event(EventType.OBS_CONNECTED, {
-                'obs_version': version.getObsVersion(),
-                'websocket_version': version.getObsWebSocketVersion()
+                'obs_version': obs_version,
+                'websocket_version': websocket_version
             }))
             
             return True
-        except ConnectionFailure as e:
-            logger.error(f"Failed to connect to OBS: {e}")
-            return False
         except Exception as e:
             logger.error(f"Error connecting to OBS: {e}")
             return False
+        finally:
+            self._connecting = False
     
-    def disconnect(self) -> None:
+    async def disconnect(self) -> None:
         """Disconnect from OBS WebSocket."""
         if self.client and self.connected:
             try:
                 logger.info("Disconnecting from OBS WebSocket...")
-                self.client.disconnect()
+                
+                # Cancel event listener task
+                if self._event_task and not self._event_task.done():
+                    self._event_task.cancel()
+                    try:
+                        await self._event_task
+                    except asyncio.CancelledError:
+                        pass
+                    
+                # Disconnect from WebSocket
+                await self.client.disconnect()
                 self.connected = False
-                event_bus.emit_sync(Event(EventType.OBS_DISCONNECTED))
+                await event_bus.emit(Event(EventType.OBS_DISCONNECTED))
                 logger.info("Disconnected from OBS WebSocket")
             except Exception as e:
                 logger.error(f"Error disconnecting from OBS: {e}")
     
+    async def cleanup(self) -> None:
+        """Clean up resources."""
+        await self.disconnect()
+    
+    async def _event_listener(self) -> None:
+        """Listen for events from OBS WebSocket."""
+        if not self.client:
+            return
+            
+        while self.connected:
+            try:
+                event = await self.client.wait_for_event()
+                
+                if not event:
+                    continue
+                    
+                event_type = event.eventType
+                event_data = event.eventData
+                
+                logger.debug(f"Received OBS event: {event_type}")
+                
+                # Handle specific events
+                if event_type == 'CurrentProgramSceneChanged':
+                    await self._handle_scene_changed(event_data)
+                elif event_type == 'SceneTransitionStarted':
+                    await self._handle_transition_begin(event_data)
+                elif event_type == 'StreamStateChanged':
+                    if event_data.get('outputActive', False):
+                        await self._handle_stream_started(event_data)
+                    else:
+                        await self._handle_stream_stopped(event_data)
+                elif event_type == 'RecordStateChanged':
+                    if event_data.get('outputActive', False):
+                        await self._handle_recording_started(event_data)
+                    else:
+                        await self._handle_recording_stopped(event_data)
+                elif event_type == 'SceneItemEnableStateChanged':
+                    await self._handle_source_visibility_changed(event_data)
+                
+            except asyncio.CancelledError:
+                logger.debug("Event listener task cancelled")
+                break
+            except Exception as e:
+                logger.error(f"Error in OBS event listener: {e}")
+                await asyncio.sleep(1)  # Prevent excessive CPU usage in case of repeated errors
+    
     def _check_connection(func):
         """Decorator to check if client is connected before executing function."""
-        def wrapper(self, *args, **kwargs):
+        async def wrapper(self, *args, **kwargs):
             if not self.client or not self.connected:
                 logger.error(f"Cannot execute {func.__name__}, not connected to OBS")
                 return None
-            return func(self, *args, **kwargs)
+            return await func(self, *args, **kwargs)
         return wrapper
     
     @_check_connection
-    def get_current_scene(self) -> Optional[str]:
+    async def get_current_scene(self) -> Optional[str]:
         """Get the current scene in OBS.
         
         Returns:
             Current scene name or None on error
         """
         try:
-            response = self.client.call(requests.GetCurrentScene())
-            return response.getName()
+            request = simpleobsws.Request('GetCurrentProgramScene')
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                logger.error(f"Error getting current scene: {response.error()}")
+                return None
+                
+            return response.responseData.get('currentProgramSceneName')
         except Exception as e:
             logger.error(f"Error getting current scene: {e}")
             return None
     
     @_check_connection
-    def get_scenes(self) -> List[str]:
+    async def get_scenes(self) -> List[str]:
         """Get all available scenes in OBS.
         
         Returns:
             List of scene names
         """
         try:
-            response = self.client.call(requests.GetSceneList())
-            return [scene['name'] for scene in response.getScenes()]
+            request = simpleobsws.Request('GetSceneList')
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                logger.error(f"Error getting scene list: {response.error()}")
+                return []
+                
+            scenes = response.responseData.get('scenes', [])
+            return [scene.get('sceneName') for scene in scenes]
         except Exception as e:
             logger.error(f"Error getting scene list: {e}")
             return []
     
     @_check_connection
-    def switch_scene(self, scene_name: str) -> bool:
+    async def switch_scene(self, scene_name: str) -> bool:
         """Switch to a specific scene in OBS.
         
         Args:
@@ -154,14 +230,20 @@ class OBSClient:
         """
         try:
             logger.info(f"Switching to scene: {scene_name}")
-            self.client.call(requests.SetCurrentScene(scene_name))
+            request = simpleobsws.Request('SetCurrentProgramScene', {'sceneName': scene_name})
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                logger.error(f"Error switching to scene {scene_name}: {response.error()}")
+                return False
+                
             return True
         except Exception as e:
             logger.error(f"Error switching to scene {scene_name}: {e}")
             return False
     
     @_check_connection
-    def get_source_visibility(self, source_name: str, scene_name: Optional[str] = None) -> Optional[bool]:
+    async def get_source_visibility(self, source_name: str, scene_name: Optional[str] = None) -> Optional[bool]:
         """Get the visibility state of a source.
         
         Args:
@@ -172,18 +254,48 @@ class OBSClient:
             True if source is visible, False if hidden, None on error
         """
         try:
-            scene = scene_name or self.get_current_scene()
+            scene = scene_name or await self.get_current_scene()
             if not scene:
                 return None
             
-            response = self.client.call(requests.GetSceneItemProperties(source_name, scene_name=scene))
-            return response.getVisible()
+            # First, get the scene item ID for the source
+            request = simpleobsws.Request('GetSceneItemList', {'sceneName': scene})
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                logger.error(f"Error getting scene items: {response.error()}")
+                return None
+                
+            scene_items = response.responseData.get('sceneItems', [])
+            item_id = None
+            
+            for item in scene_items:
+                if item.get('sourceName') == source_name:
+                    item_id = item.get('sceneItemId')
+                    break
+            
+            if item_id is None:
+                logger.error(f"Source {source_name} not found in scene {scene}")
+                return None
+            
+            # Now get the source properties
+            request = simpleobsws.Request('GetSceneItemEnabled', {
+                'sceneName': scene,
+                'sceneItemId': item_id
+            })
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                logger.error(f"Error getting source visibility: {response.error()}")
+                return None
+                
+            return response.responseData.get('sceneItemEnabled', False)
         except Exception as e:
             logger.error(f"Error getting source visibility for {source_name}: {e}")
             return None
     
     @_check_connection
-    def set_source_visibility(self, source_name: str, visible: bool, scene_name: Optional[str] = None) -> bool:
+    async def set_source_visibility(self, source_name: str, visible: bool, scene_name: Optional[str] = None) -> bool:
         """Set the visibility state of a source.
         
         Args:
@@ -195,23 +307,50 @@ class OBSClient:
             True if visibility change was successful, False otherwise
         """
         try:
-            scene = scene_name or self.get_current_scene()
+            scene = scene_name or await self.get_current_scene()
             if not scene:
                 return False
             
+            # First, get the scene item ID for the source
+            request = simpleobsws.Request('GetSceneItemList', {'sceneName': scene})
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                logger.error(f"Error getting scene items: {response.error()}")
+                return False
+                
+            scene_items = response.responseData.get('sceneItems', [])
+            item_id = None
+            
+            for item in scene_items:
+                if item.get('sourceName') == source_name:
+                    item_id = item.get('sceneItemId')
+                    break
+            
+            if item_id is None:
+                logger.error(f"Source {source_name} not found in scene {scene}")
+                return False
+            
+            # Now set the source visibility
             logger.info(f"Setting source {source_name} visibility to {visible} in scene {scene}")
-            self.client.call(requests.SetSceneItemProperties(
-                item=source_name,
-                visible=visible,
-                scene_name=scene
-            ))
+            request = simpleobsws.Request('SetSceneItemEnabled', {
+                'sceneName': scene,
+                'sceneItemId': item_id,
+                'sceneItemEnabled': visible
+            })
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                logger.error(f"Error setting source visibility: {response.error()}")
+                return False
+                
             return True
         except Exception as e:
             logger.error(f"Error setting source visibility for {source_name}: {e}")
             return False
     
     @_check_connection
-    def start_streaming(self) -> bool:
+    async def start_streaming(self) -> bool:
         """Start streaming in OBS.
         
         Returns:
@@ -219,14 +358,20 @@ class OBSClient:
         """
         try:
             logger.info("Starting stream in OBS")
-            self.client.call(requests.StartStreaming())
+            request = simpleobsws.Request('StartStream')
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                logger.error(f"Error starting stream: {response.error()}")
+                return False
+                
             return True
         except Exception as e:
             logger.error(f"Error starting stream: {e}")
             return False
     
     @_check_connection
-    def stop_streaming(self) -> bool:
+    async def stop_streaming(self) -> bool:
         """Stop streaming in OBS.
         
         Returns:
@@ -234,14 +379,20 @@ class OBSClient:
         """
         try:
             logger.info("Stopping stream in OBS")
-            self.client.call(requests.StopStreaming())
+            request = simpleobsws.Request('StopStream')
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                logger.error(f"Error stopping stream: {response.error()}")
+                return False
+                
             return True
         except Exception as e:
             logger.error(f"Error stopping stream: {e}")
             return False
     
     @_check_connection
-    def start_recording(self) -> bool:
+    async def start_recording(self) -> bool:
         """Start recording in OBS.
         
         Returns:
@@ -249,14 +400,20 @@ class OBSClient:
         """
         try:
             logger.info("Starting recording in OBS")
-            self.client.call(requests.StartRecording())
+            request = simpleobsws.Request('StartRecord')
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                logger.error(f"Error starting recording: {response.error()}")
+                return False
+                
             return True
         except Exception as e:
             logger.error(f"Error starting recording: {e}")
             return False
     
     @_check_connection
-    def stop_recording(self) -> bool:
+    async def stop_recording(self) -> bool:
         """Stop recording in OBS.
         
         Returns:
@@ -264,7 +421,13 @@ class OBSClient:
         """
         try:
             logger.info("Stopping recording in OBS")
-            self.client.call(requests.StopRecording())
+            request = simpleobsws.Request('StopRecord')
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                logger.error(f"Error stopping recording: {response.error()}")
+                return False
+                
             return True
         except Exception as e:
             logger.error(f"Error stopping recording: {e}")
@@ -272,50 +435,51 @@ class OBSClient:
     
     # OBS WebSocket event handlers
     
-    def _on_scene_changed(self, message):
+    async def _handle_scene_changed(self, data):
         """Handle scene changed event."""
-        scene_name = message.getSceneName()
+        scene_name = data.get('sceneName', '')
         logger.debug(f"Scene changed to: {scene_name}")
-        event_bus.emit_sync(Event(EventType.OBS_SCENE_CHANGED, {
+        await event_bus.emit(Event(EventType.OBS_SCENE_CHANGED, {
             'scene_name': scene_name
         }))
     
-    def _on_transition_begin(self, message):
+    async def _handle_transition_begin(self, data):
         """Handle transition begin event."""
-        source_name = message.getFromScene()
-        destination_name = message.getToScene()
-        logger.debug(f"Transition from {source_name} to {destination_name}")
+        from_scene = data.get('fromScene', '')
+        to_scene = data.get('toScene', '')
+        logger.debug(f"Transition from {from_scene} to {to_scene}")
     
-    def _on_stream_started(self, message):
+    async def _handle_stream_started(self, data):
         """Handle stream started event."""
         logger.info("Streaming started in OBS")
-        event_bus.emit_sync(Event(EventType.OBS_STREAMING_STARTED))
+        await event_bus.emit(Event(EventType.OBS_STREAMING_STARTED))
     
-    def _on_stream_stopped(self, message):
+    async def _handle_stream_stopped(self, data):
         """Handle stream stopped event."""
         logger.info("Streaming stopped in OBS")
-        event_bus.emit_sync(Event(EventType.OBS_STREAMING_STOPPED))
+        await event_bus.emit(Event(EventType.OBS_STREAMING_STOPPED))
     
-    def _on_recording_started(self, message):
+    async def _handle_recording_started(self, data):
         """Handle recording started event."""
         logger.info("Recording started in OBS")
-        event_bus.emit_sync(Event(EventType.OBS_RECORDING_STARTED))
+        await event_bus.emit(Event(EventType.OBS_RECORDING_STARTED))
     
-    def _on_recording_stopped(self, message):
+    async def _handle_recording_stopped(self, data):
         """Handle recording stopped event."""
         logger.info("Recording stopped in OBS")
-        path = message.getRecordingFilename()
-        event_bus.emit_sync(Event(EventType.OBS_RECORDING_STOPPED, {
-            'path': path
+        output_path = data.get('outputPath', '')
+        await event_bus.emit(Event(EventType.OBS_RECORDING_STOPPED, {
+            'path': output_path
         }))
     
-    def _on_source_visibility_changed(self, message):
+    async def _handle_source_visibility_changed(self, data):
         """Handle source visibility changed event."""
-        source_name = message.getSourceName()
-        visible = message.getSourceVisible()
-        scene_name = message.getSceneName()
+        scene_name = data.get('sceneName', '')
+        source_name = data.get('sourceName', '')
+        visible = data.get('sceneItemEnabled', False)
+        
         logger.debug(f"Source {source_name} visibility changed to {visible} in scene {scene_name}")
-        event_bus.emit_sync(Event(EventType.OBS_SOURCE_VISIBILITY_CHANGED, {
+        await event_bus.emit(Event(EventType.OBS_SOURCE_VISIBILITY_CHANGED, {
             'source_name': source_name,
             'visible': visible,
             'scene_name': scene_name
