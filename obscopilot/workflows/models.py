@@ -96,6 +96,7 @@ class ConditionType(str, Enum):
 class WorkflowStatus(str, Enum):
     """Status of a workflow execution."""
     
+    NOT_STARTED = "not_started"
     READY = "ready"
     RUNNING = "running"
     WAITING = "waiting"

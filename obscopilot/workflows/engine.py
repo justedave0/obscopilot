@@ -11,6 +11,7 @@ import os
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Union, Type
+from datetime import datetime
 
 from obscopilot.core.config import Config
 from obscopilot.core.events import Event, EventBus, EventType, event_bus
@@ -23,10 +24,12 @@ from obscopilot.workflows.models import (
     WorkflowNode, 
     WorkflowTrigger, 
     TriggerType,
-    WorkflowContext
+    WorkflowContext,
+    WorkflowStatus
 )
 from obscopilot.workflows.triggers import get_trigger_class, get_trigger_metadata
 from obscopilot.workflows.actions import get_action_class
+from obscopilot.workflows.persistence import WorkflowRepository
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +50,9 @@ class WorkflowContext:
         self.execution_path: List[str] = []  # Node IDs in execution order
         self.start_time = time.time()
         self.current_node_id: Optional[str] = None
+        self.status = WorkflowStatus.NOT_STARTED
+        self.error = None
+        self.end_time: Optional[datetime] = None
     
     def set_variable(self, name: str, value: Any) -> None:
         """Set a context variable.
@@ -133,6 +139,7 @@ class WorkflowEngine:
         self.event_bus = event_bus
         self.workflows: Dict[str, Workflow] = {}
         self.event_mapping: Dict[EventType, List[str]] = {}  # Maps event types to workflow IDs
+        self.repository = WorkflowRepository()
         self._register_event_handlers()
         self._setup_action_handlers()
     
@@ -160,6 +167,8 @@ class WorkflowEngine:
         self.action_handlers = {
             # Twitch actions
             ActionType.TWITCH_SEND_CHAT_MESSAGE: self._handle_twitch_send_chat_message,
+            ActionType.TWITCH_TIMEOUT_USER: self._handle_twitch_timeout_user,
+            ActionType.TWITCH_BAN_USER: self._handle_twitch_ban_user,
             
             # OBS actions
             ActionType.OBS_SWITCH_SCENE: self._handle_obs_switch_scene,
@@ -171,6 +180,7 @@ class WorkflowEngine:
             
             # Media actions
             ActionType.PLAY_SOUND: self._handle_play_sound,
+            ActionType.SHOW_IMAGE: self._handle_show_image,
             
             # AI actions
             ActionType.AI_GENERATE_RESPONSE: self._handle_ai_generate_response,
@@ -178,10 +188,13 @@ class WorkflowEngine:
             # Control flow actions
             ActionType.DELAY: self._handle_delay,
             ActionType.CONDITIONAL: self._handle_conditional,
+            ActionType.WEBHOOK: self._handle_webhook,
+            ActionType.RUN_PROCESS: self._handle_run_process,
+            ActionType.SEND_EMAIL: self._handle_send_email,
         }
     
     async def load_workflows(self, directory: Optional[Path] = None) -> int:
-        """Load workflows from a directory.
+        """Load workflows from a directory or database.
         
         Args:
             directory: Directory containing workflow JSON files
@@ -190,6 +203,18 @@ class WorkflowEngine:
             Number of workflows loaded
         """
         try:
+            # Try to load from database first
+            db_workflows = self.repository.get_all_workflows(enabled_only=True)
+            
+            if db_workflows:
+                logger.info(f"Loading {len(db_workflows)} workflows from database")
+                for workflow in db_workflows:
+                    self.register_workflow(workflow)
+                
+                logger.info(f"Successfully loaded {len(db_workflows)} workflows from database")
+                return len(db_workflows)
+            
+            # If no workflows in database, try to load from directory
             # Get workflow directory from config if not provided
             if not directory:
                 workflow_dir = self.config.get('workflows', 'workflow_dir', '')
@@ -199,65 +224,92 @@ class WorkflowEngine:
                     workflow_dir = Path(workflow_dir)
             else:
                 workflow_dir = directory
-            
+                
             # Create directory if it doesn't exist
             workflow_dir.mkdir(parents=True, exist_ok=True)
             
-            logger.info(f"Loading workflows from {workflow_dir}")
-            
-            # Load all JSON files in the directory
+            # Find JSON files in directory
             workflow_files = list(workflow_dir.glob('*.json'))
-            count = 0
+            
+            if not workflow_files:
+                logger.info(f"No workflow files found in {workflow_dir}")
+                return 0
+                
+            # Load each workflow file
+            loaded_count = 0
             
             for file_path in workflow_files:
                 try:
+                    # Load workflow from file
                     with open(file_path, 'r') as f:
                         workflow_json = f.read()
-                    
+                        
+                    # Parse JSON
                     workflow = Workflow.from_json(workflow_json)
+                    
+                    # Skip disabled workflows
+                    if not workflow.enabled:
+                        logger.info(f"Skipping disabled workflow: {workflow.name}")
+                        continue
+                    
+                    # Save workflow to database
+                    self.repository.save_workflow(workflow)
+                    
+                    # Register workflow
                     self.register_workflow(workflow)
-                    count += 1
-                    logger.info(f"Loaded workflow: {workflow.name} ({workflow.id})")
+                    
+                    loaded_count += 1
+                    
                 except Exception as e:
                     logger.error(f"Error loading workflow from {file_path}: {e}")
+                    continue
+                    
+            logger.info(f"Successfully loaded {loaded_count} workflows from {workflow_dir}")
+            return loaded_count
             
-            logger.info(f"Loaded {count} workflows")
-            return count
         except Exception as e:
             logger.error(f"Error loading workflows: {e}")
             return 0
-    
+
     async def save_workflow(self, workflow: Workflow, directory: Optional[Path] = None) -> bool:
-        """Save a workflow to file.
+        """Save a workflow to a file or database.
         
         Args:
             workflow: Workflow to save
-            directory: Directory to save the workflow in
+            directory: Directory to save workflow to
             
         Returns:
-            True if workflow was saved successfully, False otherwise
+            True if workflow was saved, False otherwise
         """
         try:
-            # Get workflow directory from config if not provided
-            if not directory:
-                workflow_dir = self.config.get('workflows', 'workflow_dir', '')
-                if not workflow_dir:
-                    workflow_dir = Path.home() / '.obscopilot' / 'workflows'
-                else:
-                    workflow_dir = Path(workflow_dir)
-            else:
-                workflow_dir = directory
+            # Save to database
+            db_result = self.repository.save_workflow(workflow)
             
-            # Create directory if it doesn't exist
-            workflow_dir.mkdir(parents=True, exist_ok=True)
+            if not db_result:
+                logger.error(f"Failed to save workflow to database: {workflow.name}")
+                return False
             
-            # Save workflow to file
-            file_path = workflow_dir / f"{workflow.id}.json"
-            with open(file_path, 'w') as f:
-                f.write(workflow.to_json())
+            # If directory is provided, also save to file
+            if directory:
+                try:
+                    # Create directory if it doesn't exist
+                    directory.mkdir(parents=True, exist_ok=True)
+                    
+                    # Generate file path
+                    file_path = directory / f"{workflow.id}.json"
+                    
+                    # Save workflow to file
+                    with open(file_path, 'w') as f:
+                        f.write(workflow.to_json())
+                        
+                    logger.info(f"Saved workflow to file: {file_path}")
+                    
+                except Exception as e:
+                    logger.error(f"Error saving workflow to file: {e}")
+                    # Continue even if file save fails, as we've already saved to DB
             
-            logger.info(f"Saved workflow: {workflow.name} ({workflow.id}) to {file_path}")
             return True
+            
         except Exception as e:
             logger.error(f"Error saving workflow: {e}")
             return False
@@ -436,43 +488,44 @@ class WorkflowEngine:
         Args:
             workflow: Workflow to execute
             trigger_data: Data from the trigger event
-            trigger: The trigger that initiated this workflow (optional)
+            trigger: Trigger that triggered the workflow
             
         Returns:
-            True if workflow execution completed successfully, False otherwise
+            True if workflow executed successfully, False otherwise
         """
         try:
-            # Create workflow context
+            # Create execution context
             context = workflow.create_context(trigger_data)
-            
-            # Record execution time for time-based triggers
-            if trigger:
-                if "_last_run" not in trigger.config:
-                    trigger.config["_last_run"] = time.time()
-                else:
-                    trigger.config["_last_run"] = time.time()
+            context.status = WorkflowStatus.RUNNING
             
             # Get entry node
             entry_node = workflow.get_entry_node()
             if not entry_node:
-                logger.error(f"Workflow has no entry node: {workflow.name} ({workflow.id})")
+                logger.error(f"No entry node found for workflow: {workflow.name}")
+                context.status = WorkflowStatus.FAILED
+                context.error = "No entry node found"
+                self._log_workflow_execution(workflow, context, trigger)
                 return False
             
-            # Execute entry node and follow the execution path
+            logger.info(f"Executing workflow: {workflow.name}")
+            
+            # Execute entry node
             try:
-                # Add entry node to execution path
-                context.add_to_execution_path(entry_node.id)
-                
-                # Execute the entry node
-                await self._execute_node(entry_node, context)
-                
-                logger.info(f"Workflow '{workflow.name}' executed successfully")
+                result = await self._execute_node(entry_node, context)
+                context.status = WorkflowStatus.COMPLETED
+                context.end_time = datetime.now()
+                self._log_workflow_execution(workflow, context, trigger)
                 return True
             except Exception as e:
-                logger.error(f"Error executing workflow '{workflow.name}': {e}")
+                logger.error(f"Error executing workflow {workflow.name}: {e}")
+                context.status = WorkflowStatus.FAILED
+                context.error = str(e)
+                context.end_time = datetime.now()
+                self._log_workflow_execution(workflow, context, trigger)
                 return False
+            
         except Exception as e:
-            logger.error(f"Error setting up workflow execution for '{workflow.name}': {e}")
+            logger.error(f"Error setting up workflow execution: {e}")
             return False
     
     async def _execute_node(self, node: WorkflowNode, context: WorkflowContext) -> Any:
@@ -694,4 +747,241 @@ class WorkflowEngine:
         """
         # Not implemented yet
         logger.warning("CONDITIONAL action not implemented")
-        return False 
+        return False
+    
+    async def _handle_twitch_timeout_user(self, action: WorkflowAction, context: WorkflowContext) -> bool:
+        """Handle a Twitch timeout user action.
+        
+        Args:
+            action: Action configuration
+            context: Workflow execution context
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            config = action.config
+            
+            # Get username
+            username = context.resolve_template(config.get("username", ""), context)
+            if not username:
+                logger.warning("No username provided for timeout")
+                return False
+            
+            # Get channel
+            channel = context.resolve_template(config.get("channel", ""), context)
+            if not channel:
+                # Use broadcaster channel if not specified
+                channel = self.twitch_client.broadcaster_login
+            
+            # Get duration
+            duration = int(config.get("duration", 300))  # Default 5 minutes
+            
+            # Get reason
+            reason = context.resolve_template(config.get("reason", ""), context)
+            
+            logger.info(f"Timing out user {username} in channel {channel} for {duration} seconds")
+            
+            # Timeout user
+            await self.twitch_client.timeout_user(
+                channel=channel, 
+                username=username, 
+                duration=duration, 
+                reason=reason if reason else None
+            )
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error in _handle_twitch_timeout_user: {e}")
+            return False
+    
+    async def _handle_twitch_ban_user(self, action: WorkflowAction, context: WorkflowContext) -> bool:
+        """Handle a Twitch ban user action.
+        
+        Args:
+            action: Action configuration
+            context: Workflow execution context
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            config = action.config
+            
+            # Get username
+            username = context.resolve_template(config.get("username", ""), context)
+            if not username:
+                logger.warning("No username provided for ban")
+                return False
+            
+            # Get channel
+            channel = context.resolve_template(config.get("channel", ""), context)
+            if not channel:
+                # Use broadcaster channel if not specified
+                channel = self.twitch_client.broadcaster_login
+            
+            # Get reason
+            reason = context.resolve_template(config.get("reason", ""), context)
+            
+            logger.info(f"Banning user {username} in channel {channel}")
+            
+            # Ban user
+            await self.twitch_client.ban_user(
+                channel=channel, 
+                username=username, 
+                reason=reason if reason else None
+            )
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error in _handle_twitch_ban_user: {e}")
+            return False
+    
+    async def _handle_show_image(self, action: WorkflowAction, context: WorkflowContext) -> bool:
+        """Handle a show image action.
+        
+        Args:
+            action: Action configuration
+            context: Workflow execution context
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            from obscopilot.workflows.actions import get_action_class
+            
+            # Get ShowImageAction class
+            action_class = get_action_class(ActionType.SHOW_IMAGE)
+            if not action_class:
+                logger.error(f"Action class not found for type: {ActionType.SHOW_IMAGE}")
+                return False
+            
+            # Get application config
+            config = self.config.get_all()
+            
+            # Execute the action using the action class
+            result = await action_class.execute(action, context, config=config)
+            
+            return result
+        except Exception as e:
+            logger.error(f"Error in _handle_show_image: {e}")
+            return False
+    
+    async def _handle_webhook(self, action: WorkflowAction, context: WorkflowContext) -> bool:
+        """Handle a webhook action.
+        
+        Args:
+            action: Action configuration
+            context: Workflow execution context
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            from obscopilot.workflows.actions import get_action_class
+            
+            # Get WebhookAction class
+            action_class = get_action_class(ActionType.WEBHOOK)
+            if not action_class:
+                logger.error(f"Action class not found for type: {ActionType.WEBHOOK}")
+                return False
+            
+            # Execute the action using the action class
+            result = await action_class.execute(action, context)
+            
+            # Return success if we got a result
+            return result is not None
+        except Exception as e:
+            logger.error(f"Error in _handle_webhook: {e}")
+            return False
+    
+    async def _handle_run_process(self, action: WorkflowAction, context: WorkflowContext) -> bool:
+        """Handle a run process action.
+        
+        Args:
+            action: Action configuration
+            context: Workflow execution context
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            from obscopilot.workflows.actions import get_action_class
+            
+            # Get RunProcessAction class
+            action_class = get_action_class(ActionType.RUN_PROCESS)
+            if not action_class:
+                logger.error(f"Action class not found for type: {ActionType.RUN_PROCESS}")
+                return False
+            
+            # Execute the action using the action class
+            result = await action_class.execute(action, context)
+            
+            # Return success flag from result
+            return result.get("success", False) if isinstance(result, dict) else False
+        except Exception as e:
+            logger.error(f"Error in _handle_run_process: {e}")
+            return False
+    
+    async def _handle_send_email(self, action: WorkflowAction, context: WorkflowContext) -> bool:
+        """Handle a send email action.
+        
+        Args:
+            action: Action configuration
+            context: Workflow execution context
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            from obscopilot.workflows.actions import get_action_class
+            
+            # Get SendEmailAction class
+            action_class = get_action_class(ActionType.SEND_EMAIL)
+            if not action_class:
+                logger.error(f"Action class not found for type: {ActionType.SEND_EMAIL}")
+                return False
+            
+            # Get application config
+            config = self.config.get_all()
+            
+            # Execute the action using the action class
+            result = await action_class.execute(action, context, config=config)
+            
+            return result
+        except Exception as e:
+            logger.error(f"Error in _handle_send_email: {e}")
+            return False
+    
+    def _log_workflow_execution(
+        self, 
+        workflow: Workflow, 
+        context: WorkflowContext, 
+        trigger: Optional[WorkflowTrigger] = None
+    ) -> None:
+        """Log a workflow execution.
+        
+        Args:
+            workflow: Executed workflow
+            context: Workflow execution context
+            trigger: Trigger that triggered the workflow
+        """
+        try:
+            # Prepare execution data
+            execution_data = {
+                'trigger_id': trigger.id if trigger else None,
+                'trigger_type': trigger.type.value if trigger else None,
+                'trigger_data': context.trigger_data,
+                'status': context.status.value,
+                'execution_path': context.execution_path,
+                'variables': context.variables,
+                'error': context.error,
+                'start_time': context.start_time.isoformat(),
+                'end_time': context.end_time.isoformat() if context.end_time else None
+            }
+            
+            # Log execution
+            self.repository.log_workflow_execution(workflow.id, execution_data)
+            
+        except Exception as e:
+            logger.error(f"Error logging workflow execution: {e}") 

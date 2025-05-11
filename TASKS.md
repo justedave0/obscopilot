@@ -14,8 +14,8 @@
 ## Phase 3: Workflow Engine
 - [x] Workflow model implementation
 - [x] Trigger system
-- [ ] Action system
-- [ ] Workflow persistence
+- [x] Action system
+- [x] Workflow persistence
 
 ## Phase 4: Advanced Features
 - [ ] Custom chat commands
