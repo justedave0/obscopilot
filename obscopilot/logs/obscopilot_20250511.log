@@ -108,3 +108,31 @@
 2025-05-11 19:31:53,044 - obscopilot - DEBUG - simple.py:1439 - Publishing event: EventType.TWITCH_CONNECTED
 2025-05-11 19:31:53,044 - obscopilot - WARNING - simple.py:1450 - Event bus has emit method which is a coroutine - directly updating UI instead
 2025-05-11 19:31:54,688 - obscopilot - INFO - simple.py:1483 - Auto-connection completed
+2025-05-11 19:55:59,987 - obscopilot - INFO - main_window.py:81 - Logging initialized, log file: c:\dev\obscopilot\obscopilot\logs\obscopilot_20250511.log
+2025-05-11 19:55:59,988 - obscopilot - INFO - main_window.py:82 - Application version: 0.1.0
+2025-05-11 19:55:59,988 - obscopilot - INFO - main_window.py:83 - Python version: 3.13.3 (tags/v3.13.3:6280bb5, Apr  8 2025, 14:47:33) [MSC v.1943 64 bit (AMD64)]
+2025-05-11 19:56:00,007 - obscopilot - INFO - main_window.py:219 - Initializing SimpleMainWindow
+2025-05-11 19:56:00,007 - obscopilot.core.config - INFO - config.py:108 - Loading configuration from C:\Users\drspl\.obscopilot\config.toml
+2025-05-11 19:56:00,039 - obscopilot.core.events - DEBUG - events.py:177 - Subscribed to EventType.TWITCH_CONNECTED
+2025-05-11 19:56:00,039 - obscopilot.core.events - DEBUG - events.py:177 - Subscribed to EventType.TWITCH_DISCONNECTED
+2025-05-11 19:56:00,039 - obscopilot.core.events - DEBUG - events.py:177 - Subscribed to EventType.OBS_CONNECTED
+2025-05-11 19:56:00,039 - obscopilot.core.events - DEBUG - events.py:177 - Subscribed to EventType.OBS_DISCONNECTED
+2025-05-11 19:56:00,039 - obscopilot.core.events - DEBUG - events.py:177 - Subscribed to EventType.WORKFLOW_LOADED
+2025-05-11 19:56:00,039 - obscopilot - INFO - main_window.py:1463 - Attempting to auto-connect to services
+2025-05-11 19:56:00,039 - obscopilot - INFO - main_window.py:1027 - Attempting to connect to OBS
+2025-05-11 19:56:00,039 - obscopilot.core.config - INFO - config.py:126 - Saving configuration to C:\Users\drspl\.obscopilot\config.toml
+2025-05-11 19:56:00,040 - obscopilot - DEBUG - main_window.py:1051 - Connecting to OBS at localhost:4455
+2025-05-11 19:56:00,557 - obscopilot - DEBUG - main_window.py:1439 - Publishing event: EventType.OBS_CONNECTED
+2025-05-11 19:56:00,557 - obscopilot - WARNING - main_window.py:1450 - Event bus has emit method which is a coroutine - directly updating UI instead
+2025-05-11 19:56:00,557 - obscopilot - INFO - main_window.py:1082 - Successfully connected to OBS
+2025-05-11 19:56:02,052 - obscopilot - INFO - main_window.py:1475 - Auto-authenticating with Twitch
+2025-05-11 19:56:02,052 - obscopilot - INFO - main_window.py:1493 - Starting Twitch authentication
+2025-05-11 19:56:02,052 - obscopilot - DEBUG - main_window.py:1519 - Would start OAuth flow here in a real implementation
+2025-05-11 19:56:02,553 - obscopilot.core.config - INFO - config.py:126 - Saving configuration to C:\Users\drspl\.obscopilot\config.toml
+2025-05-11 19:56:02,553 - obscopilot - INFO - main_window.py:1527 - Simulated successful authentication
+2025-05-11 19:56:02,554 - obscopilot - DEBUG - main_window.py:1439 - Publishing event: EventType.TWITCH_CONNECTED
+2025-05-11 19:56:02,554 - obscopilot - WARNING - main_window.py:1450 - Event bus has emit method which is a coroutine - directly updating UI instead
+2025-05-11 19:56:06,621 - obscopilot - INFO - main_window.py:1483 - Auto-connection completed
+2025-05-11 19:57:28,446 - obscopilot - INFO - main_window.py:687 - Saving application settings
+2025-05-11 19:57:28,446 - obscopilot.core.config - INFO - config.py:126 - Saving configuration to C:\Users\drspl\.obscopilot\config.toml
+2025-05-11 19:57:28,447 - obscopilot - INFO - main_window.py:709 - Settings saved successfully

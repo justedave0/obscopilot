@@ -85,8 +85,19 @@ class TwitchClient:
                 auth_manager=self.auth_manager
             )
             
-            # Connect to Twitch
+            # Connect to Twitch and verify connection is working
             await self.bot.start()
+            
+            # Verify the connection is working by attempting to fetch user information
+            try:
+                user = await self.bot.fetch_users(ids=[broadcaster_id])
+                if not user:
+                    raise Exception("Could not fetch broadcaster user data")
+                logger.info(f"Connected as Twitch user: {user[0].display_name}")
+            except Exception as verify_error:
+                logger.error(f"Failed to verify Twitch connection: {verify_error}")
+                self.connected = False
+                return False
             
             self.connected = True
             await self.event_bus.emit(Event(EventType.TWITCH_CONNECTED))
@@ -95,6 +106,36 @@ class TwitchClient:
             return True
         except Exception as e:
             logger.error(f"Error connecting to Twitch API: {e}", exc_info=True)
+            self.connected = False
+            return False
+    
+    async def is_actually_connected(self) -> bool:
+        """Check if the connection to Twitch API is actually active.
+        
+        Returns:
+            True if connected, False otherwise
+        """
+        if not self.bot or not self.connected:
+            return False
+            
+        try:
+            # Try to fetch the broadcaster's info to check if connection is alive
+            broadcaster_id = self.config.get('twitch', 'broadcaster_id')
+            if not broadcaster_id:
+                logger.error("Cannot verify connection: No broadcaster ID configured")
+                return False
+                
+            # Attempt to make an API call
+            user = await self.bot.fetch_users(ids=[broadcaster_id])
+            if not user:
+                logger.warning("Failed to fetch user data, Twitch connection might be broken")
+                self.connected = False
+                return False
+                
+            return True
+        except Exception as e:
+            logger.error(f"Error verifying Twitch connection: {e}")
+            self.connected = False
             return False
     
     async def disconnect(self) -> None:

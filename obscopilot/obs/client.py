@@ -72,7 +72,7 @@ class OBSClient:
             await self.client.connect()
             await self.client.wait_until_identified()
             
-            # Get OBS version
+            # Get OBS version to verify connection is working
             request = simpleobsws.Request('GetVersion')
             response = await self.client.call(request)
             
@@ -97,9 +97,37 @@ class OBSClient:
             return True
         except Exception as e:
             logger.error(f"Error connecting to OBS: {e}")
+            self.connected = False
             return False
         finally:
             self._connecting = False
+    
+    async def is_actually_connected(self) -> bool:
+        """Verify if the connection to OBS is actually active.
+        
+        Returns:
+            True if connection is active, False otherwise
+        """
+        if not self.client or not self.connected:
+            return False
+            
+        try:
+            # Try to get OBS version to verify connection
+            request = simpleobsws.Request('GetVersion')
+            response = await self.client.call(request)
+            
+            if not response.ok():
+                # Connection is not working properly
+                logger.warning(f"OBS connection check failed: {response.error()}")
+                self.connected = False
+                return False
+                
+            # Connection is working
+            return True
+        except Exception as e:
+            logger.error(f"Error checking OBS connection: {e}")
+            self.connected = False
+            return False
     
     async def disconnect(self) -> None:
         """Disconnect from OBS WebSocket."""
