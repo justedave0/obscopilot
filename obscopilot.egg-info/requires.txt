@@ -1,5 +1,0 @@
-PyQt6
-twitchio
-sqlalchemy
-toml
-python-dotenv

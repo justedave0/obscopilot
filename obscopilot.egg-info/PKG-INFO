@@ -1,9 +1,0 @@
-Metadata-Version: 2.4
-Name: obscopilot
-Version: 0.1.0
-Requires-Dist: PyQt6
-Requires-Dist: twitchio
-Requires-Dist: sqlalchemy
-Requires-Dist: toml
-Requires-Dist: python-dotenv
-Dynamic: requires-dist
