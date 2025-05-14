@@ -31,3 +31,26 @@ python app.py
 
 - Python 3.8 or higher
 - PyQt6
+
+## Testing
+
+The project includes a comprehensive test suite. To run the tests:
+
+```bash
+# Run all tests
+python -m pytest
+
+# Run tests with verbose output
+python -m pytest -v
+
+# Run tests in a specific file
+python -m pytest tests/test_settings_tab.py
+
+# Run a specific test
+python -m pytest tests/test_obs_websocket.py::TestOBSWebSocketService::test_connect_success
+
+# Run tests with coverage report
+python -m pytest --cov=services --cov=ui --cov-report=term --cov-report=html
+```
+
+The test coverage report will be generated in the `htmlcov` directory.
