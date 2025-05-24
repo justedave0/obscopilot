@@ -15,6 +15,8 @@ class OBSWebSocketConfig(ttk.Frame):
         self._load_settings()
         self._try_autoconnect()
         self._register_close_handler()
+        # Wire up disconnect callback
+        self.ws_service.on_disconnect = self._on_obs_disconnect
 
     def _build_ui(self):
         # Host
@@ -103,6 +105,12 @@ class OBSWebSocketConfig(ttk.Frame):
         self.connected = False
         self.connect_btn.config(text="Connect", command=self._on_connect)
         self.status_label.config(text="Not connected", foreground="red")
+
+    def _on_obs_disconnect(self):
+        self.connected = False
+        self.connect_btn.config(text="Connect", command=self._on_connect)
+        self.status_label.config(text="Not connected", foreground="red")
+        messagebox.showwarning("OBS Disconnected", "Lost connection to OBS. Please make sure OBS is running and try reconnecting.")
 
 class SettingsTab(ttk.Frame):
     def __init__(self, parent):
