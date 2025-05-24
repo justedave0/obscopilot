@@ -8,49 +8,23 @@ ObsCoPilot is a versatile and user-friendly Streamer.bot alternative with AI fun
 - Cross-platform support (Windows, macOS, Linux)
 - AI-powered automation capabilities
 - Customizable workflow system
+- **OBS WebSocket integration with automatic settings save and auto-connect**
 
-## Installation
+## OBS WebSocket Settings
 
-1. Clone this repository:
-```bash
-git clone https://github.com/yourusername/obscopilot.git
-cd obscopilot
-```
+- Configure OBS WebSocket host, port, and password in the Settings tab.
+- Settings are saved automatically as you type—no save button required.
+- **Auto-connect:**
+  - If you close the app while connected to OBS, it will auto-connect on next launch.
+  - If you close the app while not connected, auto-connect will be disabled for the next launch.
 
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+## Setup and Run
 
-3. Run the application:
-```bash
-python app.py
-```
-
-## Requirements
-
-- Python 3.8 or higher
-- PyQt6
-
-## Testing
-
-The project includes a comprehensive test suite. To run the tests:
-
-```bash
-# Run all tests
-python -m pytest
-
-# Run tests with verbose output
-python -m pytest -v
-
-# Run tests in a specific file
-python -m pytest tests/test_settings_tab.py
-
-# Run a specific test
-python -m pytest tests/test_obs_websocket.py::TestOBSWebSocketService::test_connect_success
-
-# Run tests with coverage report
-python -m pytest --cov=services --cov=ui --cov-report=term --cov-report=html
-```
-
-The test coverage report will be generated in the `htmlcov` directory.
+1. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+2. Run the application:
+   ```bash
+   python main.py
+   ```

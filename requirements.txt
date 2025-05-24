@@ -7,3 +7,7 @@ simpleobsws>=1.3.0
 websockets>=11.0.3
 keyring>=23.0.0
 keyrings.alt>=4.0.0
+obs-websocket-py
+twitchAPI[async]
+cryptography
+python-dotenv

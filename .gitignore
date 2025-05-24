@@ -35,3 +35,8 @@ venv.bak/
 # PyCharm and VS Code
 .idea/
 .vscode/
+twitch_broadcaster_token.json
+twitch_app.key
+twitch_bot_token.json
+twitch_app_credentials.enc
+settings.json
